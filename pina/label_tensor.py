@@ -350,7 +350,6 @@ class LabelTensor(torch.Tensor):
             len_index = len(index)
         except TypeError:
             len_index = 1
-
         if isinstance(index, int) or len_index == 1:
             if selected_lt.ndim == 1:
                 selected_lt = selected_lt.reshape(1, -1)
@@ -376,7 +375,6 @@ class LabelTensor(torch.Tensor):
             new_labels = deepcopy(self.full_labels)
             new_labels.update({0: {'dof': list[index], 'name': new_labels[0]['name']}})
             selected_lt.labels = self.labels
-
         return selected_lt
 
     def sort_labels(self, dim=None):

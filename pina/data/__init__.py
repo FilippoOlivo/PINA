@@ -1,4 +1,7 @@
 __all__ = [
+    'SamplePointLoader',
+    'SamplePointDataset',
+    'DataPointDataset',
 ]
 
 from .pina_dataloader import SamplePointLoader

@@ -87,3 +87,13 @@ class Collector:
             if not self.is_conditions_ready[k]:
                 raise RuntimeError('Cannot add points on a non sampled condition')
             self.data_collections[k]['input_points'] = self.data_collections[k]['input_points'].vstack(v)
+
+    def __str__(self):
+        to_print_dict = {}
+        for k,v in self.data_collections.items():
+            local_dict = {}
+            for ki,vi in v.items():
+                local_dict[ki] = type(vi)
+            local_dict[k] = self.is_conditions_ready[k]
+            to_print_dict[k] = local_dict
+        return str(to_print_dict)

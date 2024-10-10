@@ -13,19 +13,19 @@ class DataConditionInterface(ConditionInterface):
     distribution
     """
 
-    __slots__ = ["data", "conditionalvariable"]
+    __slots__ = ["data", "conditional_variable"]
 
-    def __init__(self, data, conditionalvariable=None):
+    def __init__(self, data, conditional_variable=None):
         """
         TODO
         """
         super().__init__()
         self.data = data
-        self.conditionalvariable = conditionalvariable
+        self.conditional_variable = conditional_variable
         self.condition_type = 'unsupervised'
 
     def __setattr__(self, key, value):
-        if (key == 'data') or (key == 'conditionalvariable'):
+        if (key == 'data') or (key == 'conditional_variable'):
             check_consistency(value, (LabelTensor, Graph, torch.Tensor))
             DataConditionInterface.__dict__[key].__set__(self, value)
         elif key in ('_condition_type', '_problem', 'problem', 'condition_type'):
