@@ -1,4 +1,9 @@
 __all__ = [
+    'PinaDataLoader',
+    'DataPointDataset',
+    'SamplePointDataset',
+    'Batch',
+    'PinaDataModule'
 ]
 
 from .pina_dataloader import PinaDataLoader
