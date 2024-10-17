@@ -2,9 +2,7 @@
 
 import torch
 from torch.nn.modules.loss import _Loss
-
-
-from ..optim import Optimizer, Scheduler, TorchOptimizer, TorchScheduler
+from ..optim import TorchOptimizer, TorchScheduler
 from .solver import SolverInterface
 from ..label_tensor import LabelTensor
 from ..utils import check_consistency
@@ -39,7 +37,8 @@ class SupervisedSolver(SolverInterface):
     we are seeking to approximate multiple (discretised) functions given
     multiple (discretised) input functions.
     """
-
+    __slots__ = 'supervised'
+    __name__ = 'SupervisedSolver'
     def __init__(
         self,
         problem,
@@ -47,6 +46,7 @@ class SupervisedSolver(SolverInterface):
         loss=None,
         optimizer=None,
         scheduler=None,
+        extra_features=None
     ):
         """
         :param AbstractProblem problem: The formualation of the problem.
@@ -74,18 +74,19 @@ class SupervisedSolver(SolverInterface):
                 torch.optim.lr_scheduler.ConstantLR)
 
         super().__init__(
-            model=model,
+            models=model,
             problem=problem,
-            optimizer=optimizer,
-            scheduler=scheduler,
+            optimizers=optimizer,
+            schedulers=scheduler,
+            extra_features=extra_features
         )
 
         # check consistency
         check_consistency(loss, (LossInterface, _Loss), subclass=False)
         self._loss = loss
-        self._model = self._pina_model[0]
-        self._optimizer = self._pina_optimizer[0]
-        self._scheduler = self._pina_scheduler[0]
+        self._model = self._pina_models[0]
+        self._optimizer = self._pina_optimizers[0]
+        self._scheduler = self._pina_schedulers[0]
 
     def forward(self, x):
         """Forward pass implementation for the solver.
@@ -97,12 +98,7 @@ class SupervisedSolver(SolverInterface):
 
         output = self._model(x)
 
-        output.labels = {
-            1: {
-                "name": "output",
-                "dof": self.problem.output_variables
-            }
-        }
+        output.labels = self.problem.output_variables
         return output
 
     def configure_optimizers(self):
@@ -128,15 +124,13 @@ class SupervisedSolver(SolverInterface):
         :return: The sum of the loss functions.
         :rtype: LabelTensor
         """
-
-        condition_idx = batch.condition
-
+        condition_idx = batch['supervised', 'condition_indices']
         for condition_id in range(condition_idx.min(), condition_idx.max() + 1):
 
             condition_name = self._dataloader.condition_names[condition_id]
             condition = self.problem.conditions[condition_name]
-            pts = batch.input
-            out = batch.output
+            pts = batch[self.__slots__, 'input_pts']
+            out = batch[self.__slots__, 'output_pts']
 
             if condition_name not in self.problem.conditions:
                 raise RuntimeError("Something wrong happened.")
