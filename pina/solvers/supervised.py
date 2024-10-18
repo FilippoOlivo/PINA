@@ -39,14 +39,15 @@ class SupervisedSolver(SolverInterface):
     """
     __slots__ = 'supervised'
     __name__ = 'SupervisedSolver'
+
     def __init__(
-        self,
-        problem,
-        model,
-        loss=None,
-        optimizer=None,
-        scheduler=None,
-        extra_features=None
+            self,
+            problem,
+            model,
+            loss=None,
+            optimizer=None,
+            scheduler=None,
+            extra_features=None
     ):
         """
         :param AbstractProblem problem: The formualation of the problem.
@@ -175,7 +176,7 @@ class SupervisedSolver(SolverInterface):
         Scheduler for training.
         """
         return self._scheduler
-    
+
     @property
     def optimizer(self):
         """

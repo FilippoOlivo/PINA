@@ -4,6 +4,7 @@ from lightning import LightningDataModule
 from .pina_batch import Batch
 import math
 
+
 class PinaDataLoader(LightningDataModule):
     """
     This class is used to create a dataloader to use during the training.
@@ -28,20 +29,19 @@ class PinaDataLoader(LightningDataModule):
             batch_size = n_elements
         indexes_dict = {}
         n_batches = int(math.ceil(n_elements / batch_size))
-        for k,v in self.dataset_dict.items():
+        for k, v in self.dataset_dict.items():
             if n_batches != 1:
-                indexes_dict[k] = math.floor(len(v)/(n_batches-1))
+                indexes_dict[k] = math.floor(len(v) / (n_batches - 1))
             else:
                 indexes_dict[k] = len(v)
         for i in range(n_batches):
             temp_dict = {}
-            for k,v in indexes_dict.items():
+            for k, v in indexes_dict.items():
                 if i != n_batches - 1:
-                    temp_dict[k] = range(i*v, (i+1)*v)
+                    temp_dict[k] = range(i * v, (i + 1) * v)
                 else:
-                    temp_dict[k] = range(i*v, len(self.dataset_dict[k]))
+                    temp_dict[k] = range(i * v, len(self.dataset_dict[k]))
             self.batches.append(Batch(temp_dict, self.dataset_dict))
-
 
     def __iter__(self):
         """
@@ -49,7 +49,6 @@ class PinaDataLoader(LightningDataModule):
         """
         for b in self.batches:
             yield b
-
 
     def __len__(self):
         """

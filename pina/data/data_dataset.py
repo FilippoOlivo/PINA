@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import torch
 from ..label_tensor import LabelTensor
 
+
 class DataPointDataset(Dataset):
     def __init__(self, problem, device) -> None:
         super().__init__()

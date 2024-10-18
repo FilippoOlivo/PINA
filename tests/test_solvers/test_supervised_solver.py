@@ -67,42 +67,42 @@ class Poisson(SpatialProblem):
 
     conditions = {
         'gamma1':
-        Condition(domain=CartesianDomain({
-            'x': [0, 1],
-            'y': 1
-        }),
-                  equation=FixedValue(0.0)),
+            Condition(domain=CartesianDomain({
+                'x': [0, 1],
+                'y': 1
+            }),
+                equation=FixedValue(0.0)),
         'gamma2':
-        Condition(domain=CartesianDomain({
-            'x': [0, 1],
-            'y': 0
-        }),
-                  equation=FixedValue(0.0)),
+            Condition(domain=CartesianDomain({
+                'x': [0, 1],
+                'y': 0
+            }),
+                equation=FixedValue(0.0)),
         'gamma3':
-        Condition(domain=CartesianDomain({
-            'x': 1,
-            'y': [0, 1]
-        }),
-                  equation=FixedValue(0.0)),
+            Condition(domain=CartesianDomain({
+                'x': 1,
+                'y': [0, 1]
+            }),
+                equation=FixedValue(0.0)),
         'gamma4':
-        Condition(domain=CartesianDomain({
-            'x': 0,
-            'y': [0, 1]
-        }),
-                  equation=FixedValue(0.0)),
+            Condition(domain=CartesianDomain({
+                'x': 0,
+                'y': [0, 1]
+            }),
+                equation=FixedValue(0.0)),
         'D':
-        Condition(domain=CartesianDomain({
-            'x': [0, 1],
-            'y': [0, 1]
-        }),
-                  equation=my_laplace),
+            Condition(domain=CartesianDomain({
+                'x': [0, 1],
+                'y': [0, 1]
+            }),
+                equation=my_laplace),
         'data':
-        Condition(input_points=in_, output_points=out_)
+            Condition(input_points=in_, output_points=out_)
     }
 
     def poisson_sol(self, pts):
         return -(torch.sin(pts.extract(['x']) * torch.pi) *
-                 torch.sin(pts.extract(['y']) * torch.pi)) / (2 * torch.pi**2)
+                 torch.sin(pts.extract(['y']) * torch.pi)) / (2 * torch.pi ** 2)
 
     truth_solution = poisson_sol
 

@@ -49,4 +49,3 @@ class SamplePointDataset(Dataset):
         TODO
         """
         return self.pts[[idx]], self.condition_indices[idx]
-

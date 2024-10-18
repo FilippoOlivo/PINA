@@ -64,11 +64,11 @@ class PinaDataModule(LightningDataModule):
             raise ValueError("stage must be either 'fit' or 'test'")
 
     def extract_conditions(self):
-        #Extract number of conditions
+        # Extract number of conditions
         n_data_conditions = len(self.data_dataset.condition_names)
         n_phys_conditions = len(self.sample_dataset.condition_names)
 
-        #Increment indices in data condition and update names dict
+        # Increment indices in data condition and update names dict
         self.data_dataset.condition_names = {
             key + n_phys_conditions: value
             for key, value in self.data_dataset.condition_names.items()

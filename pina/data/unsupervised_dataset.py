@@ -27,7 +27,8 @@ class UnsupervisedDataset(Dataset):
                 idx += 1
 
         self.data = LabelTensor.vstack(data) if len(data) > 0 else None
-        self.conditional_variables = LabelTensor.vstack(conditional_variables) if len(conditional_variables) > 0 else None
+        self.conditional_variables = LabelTensor.vstack(conditional_variables) if len(
+            conditional_variables) > 0 else None
         if self.data is not None:
             self.condition_indices = torch.cat(
                 [
