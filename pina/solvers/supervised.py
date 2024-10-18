@@ -130,8 +130,8 @@ class SupervisedSolver(SolverInterface):
 
             condition_name = self._dataloader.condition_names[condition_id]
             condition = self.problem.conditions[condition_name]
-            pts = batch[self.__slots__, 'input_pts']
-            out = batch[self.__slots__, 'output_pts']
+            pts = batch[self.__slots__, 'input_points']
+            out = batch[self.__slots__, 'input_points']
 
             if condition_name not in self.problem.conditions:
                 raise RuntimeError("Something wrong happened.")

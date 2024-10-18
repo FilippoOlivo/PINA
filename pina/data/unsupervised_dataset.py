@@ -51,7 +51,15 @@ class UnsupervisedDataset(Dataset):
         return self.data.shape[0]
 
     def __getitem__(self, idx):
-        """
-        TODO
-        """
-        return self.data[[idx]], self.conditional_variables[[idx]], self.condition_indices[idx]
+        if isinstance(idx, str):
+            return getattr(self, idx)
+        elif isinstance(idx, (tuple, list)):
+            if len(idx) == 2 and isinstance(idx[0], str) and isinstance(idx[1], list):
+                tensor = getattr(self, idx[0])
+                return tensor[[idx[1]]]
+            if all(isinstance(x, int) for x in idx):
+                return (
+                    self.input_pointsz[[idx]],
+                    self.output_pts[[idx]],
+                    self.condition_indices[[idx]]
+                )

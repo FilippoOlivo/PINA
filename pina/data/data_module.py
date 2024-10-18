@@ -1,7 +1,7 @@
 import torch
 from lightning import LightningDataModule
 from .sample_dataset import SamplePointDataset
-from .data_dataset import DataPointDataset
+from .supervised_dataset import SupervisedDataset
 from .unsupervised_dataset import UnsupervisedDataset
 from .pina_dataloader import PinaDataLoader
 import math
@@ -20,7 +20,7 @@ class PinaDataModule(LightningDataModule):
                  eval_size=.1,
                  batch_size=None):
         self.sample_dataset = SamplePointDataset(problem, device)
-        self.data_dataset = DataPointDataset(problem, device)
+        self.data_dataset = SupervisedDataset(problem, device)
         self.unsupervised_dataset = UnsupervisedDataset(problem, device)
         self.split_length = []
         self.split_names = []
@@ -42,18 +42,18 @@ class PinaDataModule(LightningDataModule):
         self.extract_conditions()
         if stage == 'fit' or stage is None:
             if len(self.data_dataset) > 0:
-                data_split = self.random_split(self.data_dataset,
-                                               self.split_length)
+                data_split = self.dataset_split(self.data_dataset,
+                                                self.split_length)
                 for i in range(len(self.split_length)):
                     self.splits[
                         self.split_names[i]]['supervised'] = data_split[i]
             if len(self.sample_dataset) > 0:
-                sample_split = torch.utils.data.random_split(
+                sample_split = self.dataset_split(
                     self.sample_dataset, self.split_length)
                 for i in range(len(self.split_length)):
                     self.splits[self.split_names[i]]['sample'] = sample_split[i]
             if len(self.unsupervised_dataset) > 0:
-                unsupervised_split = torch.utils.data.random_split(
+                unsupervised_split = self.dataset_split(
                     self.unsupervised_dataset, self.split_length)
                 for i in range(len(self.split_length)):
                     self.splits[self.split_names[i]][
@@ -99,7 +99,7 @@ class PinaDataModule(LightningDataModule):
                               self.condition_names)
 
     @staticmethod
-    def random_split(dataset, lengths, seed=None):
+    def dataset_split(dataset, lengths, seed=None, shuffle=True):
         """
         TODO
         """
@@ -116,12 +116,16 @@ class PinaDataModule(LightningDataModule):
 
         if sum(lengths) != len(dataset):
             raise ValueError("Sum of lengths is not equal to dataset length")
-        if seed is not None:
-            generator = torch.Generator()
-            generator.manual_seed(seed)
-            indices = torch.randperm(sum(lengths), generator=generator).tolist()
+
+        if shuffle:
+            if seed is not None:
+                generator = torch.Generator()
+                generator.manual_seed(seed)
+                indices = torch.randperm(sum(lengths), generator=generator).tolist()
+            else:
+                indices = torch.randperm(sum(lengths)).tolist()
         else:
-            indices = torch.randperm(sum(lengths)).tolist()
+            indices = torch.arange(0, sum(lengths), 1, dtype=torch.uint8).tolist()
         offsets = [
             sum(lengths[:i]) if i > 0 else 0 for i in range(len(lengths))
         ]
