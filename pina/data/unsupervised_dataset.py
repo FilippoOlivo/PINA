@@ -41,8 +41,7 @@ class UnsupervisedDataset(Dataset):
             self.conditional_variables = torch.tensor([])
             self.condition_indices = torch.tensor([])
             self.data = torch.tensor([])
-        self.data = self.data.to(device)
-        self.condition_indices = self.condition_indices.to(device)
+        self.device = device
 
     def __len__(self):
         """
@@ -52,14 +51,14 @@ class UnsupervisedDataset(Dataset):
 
     def __getitem__(self, idx):
         if isinstance(idx, str):
-            return getattr(self, idx)
+            return getattr(self, idx).to(self.device)
         elif isinstance(idx, (tuple, list)):
-            if len(idx) == 2 and isinstance(idx[0], str) and isinstance(idx[1], list):
+            if len(idx) == 2 and isinstance(idx[0], str) and isinstance(idx[1], (list, slice)):
                 tensor = getattr(self, idx[0])
-                return tensor[[idx[1]]]
+                return tensor[[idx[1]]].to(self.device)
             if all(isinstance(x, int) for x in idx):
                 return (
-                    self.input_pointsz[[idx]],
-                    self.output_pts[[idx]],
-                    self.condition_indices[[idx]]
+                    self.input_points[[idx]].to(self.device),
+                    self.conditional_variables[[idx]].to(self.device),
+                    self.condition_indices[[idx]].to(self.device),
                 )

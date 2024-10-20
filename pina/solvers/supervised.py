@@ -58,11 +58,8 @@ class SupervisedSolver(SolverInterface):
             features to use as augmented input.
         :param torch.optim.Optimizer optimizer: The neural network optimizer to
             use; default is :class:`torch.optim.Adam`.
-        :param dict optimizer_kwargs: Optimizer constructor keyword args.
-        :param float lr: The learning rate; default is 0.001.
         :param torch.optim.LRScheduler scheduler: Learning
             rate scheduler.
-        :param dict scheduler_kwargs: LR scheduler constructor keyword args.
         """
         if loss is None:
             loss = torch.nn.MSELoss()
@@ -131,8 +128,7 @@ class SupervisedSolver(SolverInterface):
             condition_name = self._dataloader.condition_names[condition_id]
             condition = self.problem.conditions[condition_name]
             pts = batch[self.__slots__, 'input_points']
-            out = batch[self.__slots__, 'input_points']
-
+            out = batch[self.__slots__, 'output_points']
             if condition_name not in self.problem.conditions:
                 raise RuntimeError("Something wrong happened.")
 
@@ -162,8 +158,8 @@ class SupervisedSolver(SolverInterface):
         the network output against the true solution. This function
         should not be override if not intentionally.
 
-        :param LabelTensor input_tensor: The input to the neural networks.
-        :param LabelTensor output_tensor: The true solution to compare the
+        :param LabelTensor input_pts: The input to the neural networks.
+        :param LabelTensor output_pts: The true solution to compare the
             network solution.
         :return: The residual loss averaged on the input coordinates
         :rtype: torch.Tensor

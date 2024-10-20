@@ -34,8 +34,7 @@ class SamplePointDataset(Dataset):
         else:  # if there are no sample points
             self.condition_indices = torch.tensor([])
             self.input_points = torch.tensor([])
-        self.input_points = self.input_points.to(device)
-        self.condition_indices = self.condition_indices.to(device)
+        self.device = device
         self.splitting_dimension = 0
 
     def __len__(self):
@@ -50,14 +49,14 @@ class SamplePointDataset(Dataset):
         """
 
         if isinstance(idx, str):
-            return getattr(self, idx)
+            return getattr(self, idx).to(self.device)
         elif isinstance(idx, (tuple, list)):
             if len(idx) == 2 and isinstance(idx[0], str) and isinstance(idx[1], list):
                 tensor = getattr(self, idx[0])
-                return tensor[[idx[1]]]
+                return tensor[[idx[1]]].to(self.device)
             if all(isinstance(x, int) for x in idx):
                 return (
-                    self.input_input_points[[idx]],
-                    self.output_input_points[[idx]],
-                    self.condition_indices[[idx]]
+                    self.input_input_points[[idx]].to(self.device),
+                    self.output_input_points[[idx]].to(self.device),
+                    self.condition_indices[[idx]].to(self.device),
                 )
