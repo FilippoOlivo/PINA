@@ -1,10 +1,10 @@
+import math
 import torch
 from lightning import LightningDataModule
 from .sample_dataset import SamplePointDataset
 from .supervised_dataset import SupervisedDataset
 from .unsupervised_dataset import UnsupervisedDataset
 from .pina_dataloader import PinaDataLoader
-import math
 
 
 class PinaDataModule(LightningDataModule):
@@ -19,6 +19,7 @@ class PinaDataModule(LightningDataModule):
                  test_size=.2,
                  eval_size=.1,
                  batch_size=None):
+        super(LightningDataModule).__init__
         self.sample_dataset = SamplePointDataset(problem, device)
         self.data_dataset = SupervisedDataset(problem, device)
         self.unsupervised_dataset = UnsupervisedDataset(problem, device)
@@ -91,11 +92,11 @@ class PinaDataModule(LightningDataModule):
                               self.condition_names)
 
     def test_dataloader(self):
-        return PinaDataLoader(self.test_splits, self.batch_size,
+        return PinaDataLoader(self.splits['test'], self.batch_size,
                               self.condition_names)
 
     def eval_dataloader(self):
-        return PinaDataLoader(self.test_splits, self.batch_size,
+        return PinaDataLoader(self.splits['eval'], self.batch_size,
                               self.condition_names)
 
     @staticmethod

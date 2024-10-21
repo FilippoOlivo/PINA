@@ -12,7 +12,7 @@ class Batch:
         TODO
         """
         length = 0
-        for k, v in self.coordinates_dict.items():
+        for v in self.coordinates_dict.values():
             length += len(v)
         return length
 
@@ -25,6 +25,5 @@ class Batch:
         if len(item) == 1:
             return self.dataset_dict[item[0]][list(
                 self.coordinates_dict[item[0]])]
-        else:
-            return self.dataset_dict[item[0]][item[1]][list(
-                self.coordinates_dict[item[0]])]
+        return self.dataset_dict[item[0]][item[1]][list(
+            self.coordinates_dict[item[0]])]

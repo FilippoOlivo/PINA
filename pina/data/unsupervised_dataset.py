@@ -1,64 +1,8 @@
-from torch.utils.data import Dataset
-import torch
-from ..label_tensor import LabelTensor
+from .base_dataset import BaseDataset
 
 
-class UnsupervisedDataset(Dataset):
+class UnsupervisedDataset(BaseDataset):
     """
     This class is used to create a dataset of unsupervised data points and, optionally, conditions.
     """
-
-    def __init__(self, problem, device) -> None:
-        """
-        TODO
-        """
-        super().__init__()
-        data = []
-        conditional_variables = []
-        self.condition_names = {}
-        collector = problem.collector
-        idx = 0
-        for name, val in collector.data_collections.items():
-            if 'data' in val.keys():
-                data.append(val['input_points'])
-                if 'conditional_variable' in val.keys():
-                    conditional_variables.append(val['conditional_variable'])
-                self.condition_names[idx] = name
-                idx += 1
-
-        self.data = LabelTensor.vstack(data) if len(data) > 0 else None
-        self.conditional_variables = LabelTensor.vstack(conditional_variables) if len(
-            conditional_variables) > 0 else None
-        if self.data is not None:
-            self.condition_indices = torch.cat(
-                [
-                    torch.tensor([i] * len(data[i]), dtype=torch.uint8)
-                    for i in range(len(self.condition_names))
-                ],
-                dim=0,
-            )
-        else:  # if there are no sample points
-            self.conditional_variables = torch.tensor([])
-            self.condition_indices = torch.tensor([])
-            self.data = torch.tensor([])
-        self.device = device
-
-    def __len__(self):
-        """
-        TODO
-        """
-        return self.data.shape[0]
-
-    def __getitem__(self, idx):
-        if isinstance(idx, str):
-            return getattr(self, idx).to(self.device)
-        elif isinstance(idx, (tuple, list)):
-            if len(idx) == 2 and isinstance(idx[0], str) and isinstance(idx[1], (list, slice)):
-                tensor = getattr(self, idx[0])
-                return tensor[[idx[1]]].to(self.device)
-            if all(isinstance(x, int) for x in idx):
-                return (
-                    self.input_points[[idx]].to(self.device),
-                    self.conditional_variables[[idx]].to(self.device),
-                    self.condition_indices[[idx]].to(self.device),
-                )
+    __slots__ = ['input_points', 'conditional_variables']

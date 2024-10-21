@@ -1,11 +1,8 @@
-from copy import deepcopy
-
-from lightning import LightningDataModule
-from .pina_batch import Batch
 import math
+from .pina_batch import Batch
 
 
-class PinaDataLoader(LightningDataModule):
+class PinaDataLoader:
     """
     This class is used to create a dataloader to use during the training.
 
@@ -47,8 +44,7 @@ class PinaDataLoader(LightningDataModule):
         """
         TODO
         """
-        for b in self.batches:
-            yield b
+        yield from self.batches
 
     def __len__(self):
         """
