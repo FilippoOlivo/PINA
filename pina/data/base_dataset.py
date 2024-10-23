@@ -15,7 +15,7 @@ class BaseDataset(Dataset):
     :var condition_names: dict of condition index and corresponding name
     """
 
-    def __new__(cls, problem, device):
+    def __new__(cls, problem=None, device=torch.device('cpu')):
         """
         Ensure correct definition of __slots__ before initialization
         :param AbstractProblem problem: The formulation of the problem.
@@ -30,7 +30,7 @@ class BaseDataset(Dataset):
                 'Something is wrong, __slots__ must be defined in subclasses.')
         return object.__new__(cls)
 
-    def __init__(self, problem, device):
+    def __init__(self, problem=None, device=torch.device('cpu')):
         """"
         Initialize the object based on __slots__
         :param AbstractProblem problem: The formulation of the problem.
@@ -38,37 +38,53 @@ class BaseDataset(Dataset):
         dataset will be loaded.
         """
         super().__init__()
-
-        self.condition_names = {}
-        collector = problem.collector
+        self.empty = True
+        self.problem = problem
+        self.device = device
+        self.condition_indices = None
         for slot in self.__slots__:
             setattr(self, slot, [])
-        num_el_per_condition = []
-        idx = 0
+        self.num_el_per_condition = []
+        self.conditions_idx = []
+        if self.problem is not None:
+            self._init_from_problem()
+
+    def _init_from_problem(self):
+        collector = self.problem.collector
         for name, data in collector.data_collections.items():
             keys = list(data.keys())
-            current_cond_num_el = None
             if sorted(self.__slots__) == sorted(keys):
-                for slot in self.__slots__:
-                    slot_data = data[slot]
-                    if isinstance(slot_data, (LabelTensor, torch.Tensor,
-                                              Graph)):
-                        if current_cond_num_el is None:
-                            current_cond_num_el = len(slot_data)
-                        elif current_cond_num_el != len(slot_data):
-                            raise ValueError('Different number of conditions')
-                    current_list = getattr(self, slot)
-                    current_list += [data[slot]] if not (
-                        isinstance(data[slot], list)) else data[slot]
-                num_el_per_condition.append(current_cond_num_el)
-                self.condition_names[idx] = name
-                idx += 1
-        if num_el_per_condition:
+                self._populate_init_list(data)
+                idx = [key for key, val in collector.conditions_name.items() if
+                       val == name]
+                self.conditions_idx.append(idx)
+        self.initialize()
+
+    def add_points(self, data_dict, condition_idx):
+        if self.empty:
+            if list(data_dict.keys()) != self.__slots__:
+                raise ValueError('Wrong keys in input dict')
+            self._populate_init_list(data_dict)
+            self.conditions_idx.append(condition_idx)
+        else:
+            self._add_point_not_empty(data_dict, condition_idx)
+
+    def _add_point_not_empty(self, data_dict, condition_idx):
+        num_el_condition = None
+        for k, v in data_dict.items():
+            if isinstance(v, (LabelTensor, torch.Tensor)) and isinstance(
+                    getattr(self, k), (LabelTensor, torch.Tensor)):
+                setattr(self, k, LabelTensor.vstack([getattr(self, k), v]))
+            elif isinstance(v, list) and isinstance(getattr(self, k), list):
+                setattr(self, k, getattr(self, k).append(v))
+
+    def initialize(self):
+        if self.num_el_per_condition:
             self.condition_indices = torch.cat(
                 [
-                    torch.tensor([i] * num_el_per_condition[i],
+                    torch.tensor([i] * self.num_el_per_condition[i],
                                  dtype=torch.uint8)
-                    for i in range(len(num_el_per_condition))
+                    for i in range(len(self.num_el_per_condition))
                 ],
                 dim=0,
             )
@@ -76,11 +92,23 @@ class BaseDataset(Dataset):
                 current_attribute = getattr(self, slot)
                 if all(isinstance(a, LabelTensor) for a in current_attribute):
                     setattr(self, slot, LabelTensor.vstack(current_attribute))
-        else:
-            self.condition_indices = torch.tensor([], dtype=torch.uint8)
-            for slot in self.__slots__:
-                setattr(self, slot, torch.tensor([]))
-        self.device = device
+        self.empty = False
+
+    def _populate_init_list(self, data_dict):
+        current_cond_num_el = None
+        for slot in self.__slots__:
+            slot_data = data_dict[slot]
+            if isinstance(slot_data, (LabelTensor, torch.Tensor,
+                    Graph)) or isinstance(slot_data,
+                    list) and len(slot_data) > 1:
+                if current_cond_num_el is None:
+                    current_cond_num_el = len(slot_data)
+                elif current_cond_num_el != len(slot_data):
+                    raise ValueError('Different number of conditions')
+            current_list = getattr(self, slot)
+            current_list += [data_dict[slot]] if not (
+                isinstance(data_dict[slot], list)) else data_dict[slot]
+        self.num_el_per_condition.append(current_cond_num_el)
 
     def __len__(self):
         return len(getattr(self, self.__slots__[0]))

@@ -92,7 +92,6 @@ def test_sample():
     assert sample_dataset.condition_indices.max() == torch.tensor(4)
     assert sample_dataset.condition_indices.min() == torch.tensor(0)
 
-
 def test_data():
     dataset = SupervisedDataset(poisson, device='cpu')
     assert len(dataset) == 61
@@ -177,7 +176,7 @@ def test_data_module():
     loader = data_module.train_dataloader()
     for batch in loader:
         assert len(batch) <= 10
-
+test_data_module()
 
 def test_loader():
     data_module = PinaDataModule(poisson, device='cpu', batch_size=10)

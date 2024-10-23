@@ -41,8 +41,8 @@ class PinaDataModule(LightningDataModule):
         dataset_classes = [SupervisedDataset, UnsupervisedDataset,
                            SamplePointDataset]
         if datasets is None:
-            self.datasets = [DatasetClass(problem, device) for DatasetClass in
-                             dataset_classes]
+            self.datasets = None
+            self._create_datasets(dataset_classes, problem, device)
         else:
             self.datasets = datasets
 
@@ -59,7 +59,7 @@ class PinaDataModule(LightningDataModule):
             self.split_names.append('eval')
 
         self.batch_size = batch_size
-        self.condition_names = None
+        self.condition_names = problem.collector.conditions_name
         self.splits = {k: {} for k in self.split_names}
         self.shuffle = shuffle
 
@@ -67,7 +67,6 @@ class PinaDataModule(LightningDataModule):
         """
         Perform the splitting of the dataset
         """
-        self.extract_conditions()
         if stage == 'fit' or stage is None:
             for dataset in self.datasets:
                 if len(dataset) > 0:
@@ -81,26 +80,6 @@ class PinaDataModule(LightningDataModule):
             raise NotImplementedError("Testing pipeline not implemented yet")
         else:
             raise ValueError("stage must be either 'fit' or 'test'")
-
-    def extract_conditions(self):
-        """
-        Extract conditions from dataset and update condition indices
-        """
-        # Extract number of conditions
-        n_conditions = 0
-        for dataset in self.datasets:
-            if n_conditions != 0:
-                dataset.condition_names = {
-                    key + n_conditions: value
-                    for key, value in dataset.condition_names.items()
-                }
-            n_conditions += len(dataset.condition_names)
-
-        self.condition_names = {
-            key: value
-            for dataset in self.datasets
-            for key, value in dataset.condition_names.items()
-        }
 
     def train_dataloader(self):
         """
@@ -172,3 +151,19 @@ class PinaDataModule(LightningDataModule):
             PinaSubset(dataset, indices[offset:offset + length])
             for offset, length in zip(offsets, lengths)
         ]
+
+    def _create_datasets(self, dataset_classes, problem, device):
+        collector = problem.collector
+        datasets_slots = [i.__slots__ for i in dataset_classes]
+        self.datasets = [dataset(device=device) for dataset in
+                         dataset_classes]
+        for name, data in collector.data_collections.items():
+            keys = list(data.keys())
+            idx = [key for key, val in collector.conditions_name.items() if
+                   val == name]
+            for i in range(len(datasets_slots)):
+                if datasets_slots[i] == keys:
+                    self.datasets[i].add_points(data, idx[0])
+                    continue
+        for dataset in self.datasets:
+            dataset.initialize()
