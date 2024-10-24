@@ -30,4 +30,4 @@ class PinaSubset:
             return tensor[self.indices]
         if isinstance(tensor, list):
             return [tensor[i] for i in self.indices]
-        raise AttributeError("No attribute named {}".format(name))
+        raise AttributeError(f"No attribute named {name}")

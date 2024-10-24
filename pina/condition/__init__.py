@@ -1,5 +1,4 @@
 __all__ = [
-    'Condition',
     'ConditionInterface',
     'DomainEquationCondition',
     'InputPointsEquationCondition',

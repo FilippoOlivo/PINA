@@ -366,7 +366,8 @@ class LabelTensor(torch.Tensor):
         if isinstance(index, (int, slice)):
             return self._getitem_int_slice(index, selected_lt)
 
-        if len(index) == self.tensor.ndim:
+        if len(index) == self.tensor.ndim and not isinstance(index,
+                                                             torch.Tensor):
             return self._getitem_full_dim_indexing(index, selected_lt)
 
         if isinstance(index, torch.Tensor) or (
@@ -429,7 +430,9 @@ class LabelTensor(torch.Tensor):
         :return:
         """
         if isinstance(index, torch.Tensor):
-            index = index.nonzero()
+            if index.dtype == torch.bool:
+                index = index.nonzero().squeeze()
+            index = index.tolist()
         if isinstance(index, list):
             return {dim: {'dof': [old_labels[dim]['dof'][i] for i in index],
                           'name': old_labels[dim]['name']}}
@@ -451,3 +454,8 @@ class LabelTensor(torch.Tensor):
         new_labels[dim] = {'dof': sorted(labels),
                            'name': new_labels[dim]['name']}
         return LabelTensor(self.tensor[indexer], new_labels)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls(deepcopy(self.tensor), deepcopy(self.full_labels))
+        return result

@@ -91,13 +91,14 @@ def test_sample():
     assert sample_dataset.condition_indices.dtype == torch.uint8
     assert sample_dataset.condition_indices.max() == torch.tensor(4)
     assert sample_dataset.condition_indices.min() == torch.tensor(0)
+    data = sample_dataset[0]
+    assert isinstance(data, list)
+
 
 def test_data():
     dataset = SupervisedDataset(poisson, device='cpu')
     assert len(dataset) == 61
-    assert dataset['input_points'].shape == (61, 2)
     assert dataset.input_points.shape == (61, 2)
-    assert dataset['input_points'].labels == ['x', 'y']
     assert dataset.input_points.labels == ['x', 'y']
     assert dataset.input_points[3:].shape == (58, 2)
     assert dataset.output_points[:3].labels == ['u']
@@ -176,7 +177,7 @@ def test_data_module():
     loader = data_module.train_dataloader()
     for batch in loader:
         assert len(batch) <= 10
-test_data_module()
+
 
 def test_loader():
     data_module = PinaDataModule(poisson, device='cpu', batch_size=10)

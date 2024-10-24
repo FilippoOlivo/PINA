@@ -48,9 +48,6 @@ def test_constructor():
     SupervisedSolver(problem=problem, model=model)
 
 
-test_constructor()
-
-
 def laplace_equation(input_, output_):
     force_term = (torch.sin(input_.extract(['x']) * torch.pi) *
                   torch.sin(input_.extract(['y']) * torch.pi))
@@ -123,7 +120,6 @@ def test_train_cpu():
                       test_size=0.,
                       eval_size=0.)
     trainer.train()
-test_train_cpu()
 
 
 def test_extra_features_constructor():

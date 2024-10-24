@@ -3,6 +3,7 @@ This module provide basic data management functionalities
 """
 
 import math
+
 import torch
 from lightning import LightningDataModule
 from .sample_dataset import SamplePointDataset
@@ -38,11 +39,12 @@ class PinaDataModule(LightningDataModule):
         :param datasets: list of datasets objects
         """
         super().__init__()
-        dataset_classes = [SupervisedDataset, UnsupervisedDataset,
-                           SamplePointDataset]
+        self.problem = problem
+        self.device = device
+        self.dataset_classes = [SupervisedDataset, UnsupervisedDataset,
+                                SamplePointDataset]
         if datasets is None:
             self.datasets = None
-            self._create_datasets(dataset_classes, problem, device)
         else:
             self.datasets = datasets
 
@@ -67,6 +69,7 @@ class PinaDataModule(LightningDataModule):
         """
         Perform the splitting of the dataset
         """
+        self._create_datasets()
         if stage == 'fit' or stage is None:
             for dataset in self.datasets:
                 if len(dataset) > 0:
@@ -152,17 +155,17 @@ class PinaDataModule(LightningDataModule):
             for offset, length in zip(offsets, lengths)
         ]
 
-    def _create_datasets(self, dataset_classes, problem, device):
-        collector = problem.collector
-        datasets_slots = [i.__slots__ for i in dataset_classes]
-        self.datasets = [dataset(device=device) for dataset in
-                         dataset_classes]
+    def _create_datasets(self):
+        collector = self.problem.collector
+        datasets_slots = [i.__slots__ for i in self.dataset_classes]
+        self.datasets = [dataset(device=self.device) for dataset in
+                         self.dataset_classes]
         for name, data in collector.data_collections.items():
             keys = list(data.keys())
             idx = [key for key, val in collector.conditions_name.items() if
                    val == name]
-            for i in range(len(datasets_slots)):
-                if datasets_slots[i] == keys:
+            for i, slot in enumerate(datasets_slots):
+                if slot == keys:
                     self.datasets[i].add_points(data, idx[0])
                     continue
         for dataset in self.datasets:
