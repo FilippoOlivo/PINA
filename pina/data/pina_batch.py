@@ -37,7 +37,8 @@ class Batch:
         if item in super().__getattribute__('attributes'):
             dataset = super().__getattribute__(item)
             index = super().__getattribute__(item + '_idx')
-            return PinaSubset(dataset.dataset, dataset.indices[index])
+            return PinaSubset(dataset.dataset, dataset.indices[index],
+                              require_grad=self.require_grad)
         return super().__getattribute__(item)
 
     def __getattr__(self, item):

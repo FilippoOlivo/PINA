@@ -231,8 +231,8 @@ class LabelTensor(torch.Tensor):
             if not isinstance(v, range):
                 extractor[idx_dim] = [dim_labels.index(i)
                                       for i in v] if len(v) > 1 else slice(
-                                          dim_labels.index(v[0]),
-                                          dim_labels.index(v[0]) + 1)
+                    dim_labels.index(v[0]),
+                    dim_labels.index(v[0]) + 1)
             else:
                 extractor[idx_dim] = slice(v.start, v.stop)
 
@@ -409,6 +409,9 @@ class LabelTensor(torch.Tensor):
 
         selected_lt = super().__getitem__(index)
 
+        if isinstance(index, torch.Tensor) and index.dtype == torch.bool:
+            index = [index.nonzero().squeeze().tolist()]
+
         if isinstance(index, (int, slice)):
             index = [index]
 
@@ -436,11 +439,14 @@ class LabelTensor(torch.Tensor):
         :param dim: label index
         :return:
         """
+
         old_dof = old_labels[dim]['dof']
+        if isinstance(index, torch.Tensor) and index.ndim == 0:
+            index = int(index)
         if not isinstance(
                 index,
-            (int, slice)) and len(index) == len(old_dof) and isinstance(
-                old_dof, range):
+                (int, slice)) and len(index) == len(old_dof) and isinstance(
+            old_dof, range):
             return
         if isinstance(index, torch.Tensor):
             index = index.nonzero(

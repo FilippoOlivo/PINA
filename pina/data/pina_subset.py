@@ -11,7 +11,7 @@ class PinaSubset:
     """
     __slots__ = ['dataset', 'indices', 'require_grad']
 
-    def __init__(self, dataset, indices, require_grad=True):
+    def __init__(self, dataset, indices, require_grad=False):
         """
         TODO
         """

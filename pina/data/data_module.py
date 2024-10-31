@@ -23,8 +23,8 @@ class PinaDataModule(LightningDataModule):
                  problem,
                  device,
                  train_size=.7,
-                 test_size=.1,
-                 val_size=.2,
+                 test_size=.2,
+                 val_size=.1,
                  predict_size=0.,
                  batch_size=None,
                  shuffle=True,
@@ -140,7 +140,7 @@ class PinaDataModule(LightningDataModule):
                 indices = torch.randperm(sum(lengths))
             dataset.apply_shuffle(indices)
 
-        indices = torch.arange(0, sum(lengths), 1, dtype=torch.uint8).tolist()
+        indices = torch.arange(0, sum(lengths), 1, dtype=torch.int32).tolist()
         offsets = [
             sum(lengths[:i]) if i > 0 else 0 for i in range(len(lengths))
         ]
