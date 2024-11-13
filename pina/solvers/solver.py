@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from ..model.network import Network
-import pytorch_lightning
+import lightning
 from ..utils import check_consistency
 from ..problem import AbstractProblem
 from ..optim import Optimizer, Scheduler
@@ -10,7 +10,8 @@ import torch
 import sys
 
 
-class SolverInterface(pytorch_lightning.LightningModule, metaclass=ABCMeta):
+
+class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
     """
     Solver base class. This class inherits is a wrapper of
     LightningModule class, inheriting all the
@@ -88,12 +89,20 @@ class SolverInterface(pytorch_lightning.LightningModule, metaclass=ABCMeta):
         self._pina_schedulers = schedulers
         self._pina_problem = problem
 
+        self.validation_condition_losses = {
+            k: {'loss': [],
+                'count': []} for k in self.problem.conditions.keys()}
+        self.train_condition_losses = {
+            k: {'loss': [],
+                'count': []} for k in self.problem.conditions.keys()}
+
+
     @abstractmethod
     def forward(self, *args, **kwargs):
         pass
 
     @abstractmethod
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch):
         pass
 
     @abstractmethod
@@ -142,3 +151,11 @@ class SolverInterface(pytorch_lightning.LightningModule, metaclass=ABCMeta):
                 raise ValueError(
                     f'{self.__name__} dose not support condition '
                     f'{condition.condition_type}')
+
+    @staticmethod
+    def get_batch_size(batch):
+        # Assuming batch is your custom Batch object
+        batch_size = 0
+        for data in batch:
+            batch_size += len(data[1]['input_points'])
+        return batch_size
