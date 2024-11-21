@@ -4,13 +4,33 @@ from lightning.pytorch import LightningDataModule
 import math
 import torch
 from ..label_tensor import LabelTensor
-from torch.utils.data import DataLoader, BatchSampler, SequentialSampler, DistributedSampler
+from torch.utils.data import DataLoader, BatchSampler, SequentialSampler, RandomSampler, Sampler
+from torch.utils.data.distributed import DistributedSampler
 from functools import partial
 from .dataset import PinaDataset
 
 
 def collate_fn(batch):
-    return batch
+    return batch[0]
+
+class PinaBatchSampler(BatchSampler):
+
+    def __init__(self, dataset, batch_size, shuffle, sampler=None):
+        if sampler is None:
+            if torch.distributed.is_available() and torch.distributed.is_initialized():
+                rank = torch.distributed.get_rank()
+                world_size = torch.distributed.get_world_size()
+                sampler = DistributedSampler(dataset, shuffle=shuffle, rank=rank, num_replicas=world_size)
+            else:
+                if shuffle:
+                    sampler = RandomSampler(dataset)
+                else:
+                    sampler = SequentialSampler(dataset)
+        super().__init__(sampler=sampler, batch_size=batch_size, drop_last=False)
+
+    def __iter__(self):
+        for batch in super().__iter__():
+            yield [batch]
 
 class PinaDataModule(LightningDataModule):
     """
@@ -149,24 +169,18 @@ class PinaDataModule(LightningDataModule):
         Create the validation dataloader
         """
         batch_size = self.batch_size if self.batch_size is not None else len(self.val_dataset)
-        if torch.distributed.is_initialized():
-            sampler = DistributedSampler(self.val_dataset, shuffle=False)
-        else:
-            sampler = SequentialSampler(self.val_dataset)
-        batch_sampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=False)
-        return DataLoader(self.val_dataset, sampler=batch_sampler, collate_fn=collate_fn)
+        sampler = PinaBatchSampler(self.val_dataset, batch_size, shuffle=True)
+
+        return DataLoader(self.val_dataset, batch_sampler=sampler, collate_fn=collate_fn)
 
     def train_dataloader(self):
         """
         Create the training dataloader
         """
         batch_size = self.batch_size if self.batch_size is not None else len(self.train_dataset)
+        sampler = PinaBatchSampler(self.train_dataset, batch_size, shuffle=True)
 
-
-
-        sampler = SequentialSampler(self.val_dataset)
-        batch_sampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=False)
-        return DataLoader(self.train_dataset, sampler=batch_sampler, collate_fn=collate_fn)
+        return DataLoader(self.train_dataset, batch_sampler=sampler, collate_fn=collate_fn)
 
     def test_dataloader(self):
         """
@@ -192,5 +206,5 @@ class PinaDataModule(LightningDataModule):
         training loop and is used to transfer the batch to the device.
         """
         batch = [(k, super(LightningDataModule, self).transfer_batch_to_device(v, device, dataloader_idx))
-                 for k, v in batch[0].items()]
+                 for k, v in batch.items()]
         return batch
