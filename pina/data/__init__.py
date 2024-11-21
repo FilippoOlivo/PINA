@@ -8,5 +8,5 @@ __all__ = [
 
 
 
-from .data_management import PinaDataModule
-from .data_management import  PinaDataset
+from .data_module import PinaDataModule
+from .dataset import  PinaDataset

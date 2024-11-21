@@ -1,63 +1,16 @@
-"""
-This module provide basic data management functionalities
-"""
 
 import logging
 from lightning.pytorch import LightningDataModule
 import math
 import torch
 from ..label_tensor import LabelTensor
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, BatchSampler, SequentialSampler, DistributedSampler
 from functools import partial
-
-class PinaDataset(Dataset):
-    def __init__(self, conditions_dict):
-        self.conditions_dict = conditions_dict
-        self.length = self._get_max_len()
-
-    def _get_max_len(self):
-        max_len = 0
-        for condition in self.conditions_dict.values():
-            max_len = max(max_len, len(condition['input_points']))
-        return max_len
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, idx):
-        return {
-            k: {k_data: v[k_data][idx % len(v['input_points'])] for k_data
-                in v.keys()} for k, v in self.conditions_dict.items()
-        }
+from .dataset import PinaDataset
 
 
-def collate_fn(batch, max_conditions_lengths):
-    """
-    Function used to collate the batch
-    """
-    batch_dict = {}
-    if isinstance(batch, dict):
-        return batch
-    conditions_names = batch[0].keys()
-
-    # Condition names
-    for condition_name in conditions_names:
-        single_cond_dict = {}
-        condition_args = batch[0][condition_name].keys()
-        for arg in condition_args:
-            data_list = [batch[idx][condition_name][arg] for idx in range(
-                min(len(batch), max_conditions_lengths[condition_name]))]
-            if isinstance(data_list[0], LabelTensor):
-                single_cond_dict[arg] = LabelTensor.stack(data_list)
-            elif isinstance(data_list[0], torch.Tensor):
-                single_cond_dict[arg] = torch.stack(data_list)
-            else:
-                raise NotImplementedError(
-                    f"Data type {type(data_list[0])} not supported")
-        batch_dict[condition_name] = single_cond_dict
-    return batch_dict
-
+def collate_fn(batch):
+    return batch
 
 class PinaDataModule(LightningDataModule):
     """
@@ -98,17 +51,17 @@ class PinaDataModule(LightningDataModule):
         else:
             self.train_dataloader = super().train_dataloader
         if test_size > 0:
-            splits_dict['test'] = train_size
+            splits_dict['test'] = test_size
             self.test_dataset = None
         else:
             self.test_dataloader = super().test_dataloader
         if val_size > 0:
-            splits_dict['val'] = train_size
+            splits_dict['val'] = val_size
             self.val_dataset = None
         else:
             self.val_dataloader = super().val_dataloader
         if predict_size > 0:
-            splits_dict['predict'] = train_size
+            splits_dict['predict'] = predict_size
             self.predict_dataset = None
         else:
             self.predict_dataloader = super().predict_dataloader
@@ -122,29 +75,30 @@ class PinaDataModule(LightningDataModule):
         logging.debug('Start setup of Pina DataModule obj')
 
         if stage == 'fit' or stage is None:
-            self.train_dataset = PinaDataset(self.collector_splits['train'])
+            self.train_dataset = PinaDataset(self.collector_splits['train'], self.find_max_conditions_lengths('train'))
             if 'val' in self.collector_splits.keys():
-                self.val_dataset = PinaDataset(self.collector_splits['val'])
+                self.val_dataset = PinaDataset(self.collector_splits['val'], self.find_max_conditions_lengths('val'))
         elif stage == 'test':
-            self.test_dataset = PinaDataset(self.collector_splits['test'])
+            self.test_dataset = PinaDataset(self.collector_splits['test'], self.find_max_conditions_lengths('test'))
         elif stage == 'predict':
-            self.predict_dataset = PinaDataset(self.collector_splits['predict'])
+            self.predict_dataset = PinaDataset(self.collector_splits['predict'], self.find_max_conditions_lengths('predict'))
         else:
             raise ValueError("stage must be either 'fit' or 'test' or 'predict'.")
 
     @staticmethod
     def _split_condition(condition_dict, splits_dict):
         len_condition = len(condition_dict['input_points'])
+
         lengths = [
             int(math.floor(len_condition * length)) for length in
             splits_dict.values()
         ]
+
         remainder = len_condition - sum(lengths)
         for i in range(remainder):
             lengths[i % len(lengths)] += 1
         splits_dict = {k: v for k, v in zip(splits_dict.keys(), lengths)
                        }
-
         to_return_dict = {}
         offset = 0
         for stage, stage_len in splits_dict.items():
@@ -156,7 +110,7 @@ class PinaDataModule(LightningDataModule):
 
     def _create_splits(self, collector, splits_dict):
         """
-        Create the dataset objects putting data 
+        Create the dataset objects putting data
         """
         logging.debug('Dataset creation in PinaDataModule obj')
         split_names = list(splits_dict.keys())
@@ -194,21 +148,25 @@ class PinaDataModule(LightningDataModule):
         """
         Create the validation dataloader
         """
-        max_conditions_lengths = self.find_max_conditions_lengths('val')
-        collate_fn_val = partial(collate_fn, max_conditions_lengths = max_conditions_lengths)
-        return DataLoader(self.val_dataset, self.batch_size,
-                          collate_fn=collate_fn_val, shuffle=False # already shuffled in self._create_split
-                          )
+        batch_size = self.batch_size if self.batch_size is not None else len(self.val_dataset)
+        if torch.distributed.is_initialized():
+            sampler = DistributedSampler(self.val_dataset, shuffle=False)
+        else:
+            sampler = SequentialSampler(self.val_dataset)
+        batch_sampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=False)
+        return DataLoader(self.val_dataset, sampler=batch_sampler, collate_fn=collate_fn)
 
     def train_dataloader(self):
         """
         Create the training dataloader
         """
-        max_conditions_lengths = self.find_max_conditions_lengths('train')
-        collate_fn_train = partial(collate_fn, max_conditions_lengths = max_conditions_lengths)
-        return DataLoader(self.train_dataset, self.batch_size,
-                          collate_fn=collate_fn_train, shuffle=False # already shuffled in self._create_split
-                          )
+        batch_size = self.batch_size if self.batch_size is not None else len(self.train_dataset)
+
+
+
+        sampler = SequentialSampler(self.val_dataset)
+        batch_sampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=False)
+        return DataLoader(self.train_dataset, sampler=batch_sampler, collate_fn=collate_fn)
 
     def test_dataloader(self):
         """
@@ -234,5 +192,5 @@ class PinaDataModule(LightningDataModule):
         training loop and is used to transfer the batch to the device.
         """
         batch = [(k, super(LightningDataModule, self).transfer_batch_to_device(v, device, dataloader_idx))
-                 for k, v in batch.items()]
+                 for k, v in batch[0].items()]
         return batch

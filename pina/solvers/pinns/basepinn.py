@@ -100,6 +100,7 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         self._optimizer = self._pina_optimizers[0]
         self._scheduler = self._pina_schedulers[0]
 
+
     def training_step(self, batch):
         """
         The Physics Informed Solver Training Step. This function takes care
@@ -115,13 +116,15 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         """
 
         condition_loss = []
-        for condition_name, points in batch.items():
+        for condition_name, points in batch:
             if 'output_points' in points:
                 input_pts, output_pts = points['input_points'], points['output_points']
+
                 loss_ = self.loss_data(input_pts=input_pts, output_pts=output_pts)
                 condition_loss.append(loss_.as_subclass(torch.Tensor))
             else:
                 input_pts = points['input_points']
+
                 condition = self.problem.conditions[condition_name]
 
                 loss_ = self.loss_phys(input_pts.requires_grad_(), condition.equation)
@@ -132,6 +135,7 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         loss = sum(condition_loss)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True,
                  logger=True)
+
         return loss
 
     def validation_step(self, batch):
@@ -139,13 +143,14 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         TODO: add docstring
         """
         condition_loss = []
-        for condition_name, points in batch.items():
+        for condition_name, points in batch:
             if 'output_points' in points:
                 input_pts, output_pts = points['input_points'], points['output_points']
                 loss_ = self.loss_data(input_pts=input_pts, output_pts=output_pts)
                 condition_loss.append(loss_.as_subclass(torch.Tensor))
             else:
                 input_pts = points['input_points']
+
                 condition = self.problem.conditions[condition_name]
                 with torch.set_grad_enabled(True):
                     loss_ = self.loss_phys(input_pts.requires_grad_(), condition.equation)

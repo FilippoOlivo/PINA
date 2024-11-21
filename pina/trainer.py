@@ -31,11 +31,8 @@ class Trainer(lightning.pytorch.Trainer):
             and can be choosen from the `pytorch-lightning
             Trainer API <https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api>`_
         """
-        log_every_n_steps = kwargs.pop('log_every_n_steps', 0)
-        super().__init__(log_every_n_steps=log_every_n_steps, **kwargs)
 
-        strategy = kwargs.get('strategy', None)
-
+        super().__init__(**kwargs)
 
         # check inheritance consistency for solver and batch size
         check_consistency(solver, SolverInterface)
@@ -49,6 +46,7 @@ class Trainer(lightning.pytorch.Trainer):
         self.batch_size = batch_size
         self._move_to_device()
         self.data_module = None
+        self._create_loader()
 
     def _move_to_device(self):
         device = self._accelerator_connector._parallel_devices[0]
@@ -88,7 +86,7 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Train the solver method.
         """
-        self._create_loader()
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",

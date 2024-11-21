@@ -133,7 +133,18 @@ class PINN(PINNInterface):
         """
         # if the problem is an InverseProblem, add the unknown parameters
         # to the parameters that the optimizer needs to optimize
+
+
         self._optimizer.hook(self._model.parameters())
+        if isinstance(self.problem, InverseProblem):
+            self._optimizer.optimizer_instance.add_param_group(
+                    {
+                        "params": [
+                            self._params[var]
+                            for var in self.problem.unknown_variables
+                        ]
+                    }
+                )
         self._scheduler.hook(self._optimizer)
         return ([self._optimizer.optimizer_instance],
                 [self._scheduler.scheduler_instance])
