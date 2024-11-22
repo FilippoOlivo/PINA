@@ -9,7 +9,6 @@ from problems.stokes import Stokes
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run PINA")
-    parser = argparse.ArgumentParser(description="Run PINA")
     parser.add_argument("--load", help="directory to save or load file", type=str)
     parser.add_argument("--epochs", help="extra features", type=int, default=1000)
     args = parser.parse_args()
