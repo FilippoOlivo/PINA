@@ -131,7 +131,7 @@ class SupervisedSolver(SolverInterface):
             loss_ = self.loss_data(input_pts=input_pts, output_pts=output_pts)
             condition_loss.append(loss_.as_subclass(torch.Tensor))
         loss = sum(condition_loss)
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True,
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True,
                  batch_size=self.get_batch_size(batch), sync_dist=True)
         return loss
 
@@ -145,7 +145,7 @@ class SupervisedSolver(SolverInterface):
             loss_ = self.loss_data(input_pts=input_pts, output_pts=output_pts)
             condition_loss.append(loss_.as_subclass(torch.Tensor))
         loss = sum(condition_loss)
-        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True,
+        self.log('val_loss', loss, prog_bar=True, logger=True,
                  batch_size=self.get_batch_size(batch), sync_dist=True)
 
 

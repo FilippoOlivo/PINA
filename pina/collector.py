@@ -67,6 +67,9 @@ class Collector:
         for loc in sample_locations:
             # get condition
             condition = self.problem.conditions[loc]
+            condition_domain = condition.domain
+            if isinstance(condition_domain, str):
+                condition_domain = self.problem.domains[condition_domain]
             keys = ["input_points", "equation"]
             # if the condition is not ready, we get and store the data
             if not self._is_conditions_ready[loc]:
@@ -85,8 +88,9 @@ class Collector:
 
             # get the samples
             samples = [
-                condition.domain.sample(n=n, mode=mode, variables=variables)
-            ] + already_sampled
+                          condition_domain.sample(n=n, mode=mode,
+                                                  variables=variables)
+                      ] + already_sampled
             pts = merge_tensors(samples)
             if set(pts.labels).issubset(sorted(self.problem.input_variables)):
                 pts = pts.sort_labels()
@@ -111,5 +115,6 @@ class Collector:
             if not self._is_conditions_ready[k]:
                 raise RuntimeError(
                     'Cannot add points on a non sampled condition')
-            self.data_collections[k]['input_points'] = LabelTensor.vstack([self.data_collections[k][
-                                                                               'input_points'], v])
+            self.data_collections[k]['input_points'] = LabelTensor.vstack(
+                [self.data_collections[k][
+                     'input_points'], v])

@@ -89,14 +89,6 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         self._pina_schedulers = schedulers
         self._pina_problem = problem
 
-        self.validation_condition_losses = {
-            k: {'loss': [],
-                'count': []} for k in self.problem.conditions.keys()}
-        self.train_condition_losses = {
-            k: {'loss': [],
-                'count': []} for k in self.problem.conditions.keys()}
-
-
     @abstractmethod
     def forward(self, *args, **kwargs):
         pass

@@ -86,16 +86,7 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Train the solver method.
         """
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="You defined a `validation_step` but have no "
-                        "`val_dataloader`",
-                category=UserWarning
-            )
-
-            return super().fit(self.solver,
+        return super().fit(self.solver,
                                datamodule=self.data_module,
                                **kwargs)
 

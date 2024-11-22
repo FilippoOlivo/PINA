@@ -7,7 +7,6 @@ from torch import Tensor
 
 full_labels = False
 MATH_FUNCTIONS = {torch.sin, torch.cos}
-GRAD_FUNCTIONS = {torch.autograd.grad}
 
 
 def issubset(a, b):
@@ -530,7 +529,14 @@ class LabelTensor(torch.Tensor):
             selected_lt._labels = labels
             return selected_lt
 
-        if not isinstance(index, (list,tuple, torch.Tensor)):
+        if isinstance(index, int):
+            labels.pop(0, None)
+            labels = {key - 1 if key > 0 else key: value for key, value in
+                      labels.items()}
+            selected_lt._labels = labels
+            return selected_lt
+
+        if not isinstance(index, (tuple, torch.Tensor)):
             index = [index]
 
         # Ellipsis are used to perform operation on the last dimension
@@ -550,7 +556,8 @@ class LabelTensor(torch.Tensor):
                     self._update_single_label(stored_labels, labels, idx, j, i)
             else:
                 if isinstance(idx, int):
-                    labels = {key - 1 if key > j else key: value for key, value in labels.items()}
+                    labels = {key - 1 if key > j else key:
+                                  value for key, value in labels.items()}
                     continue
             i += 1
         selected_lt._labels = labels
@@ -567,7 +574,7 @@ class LabelTensor(torch.Tensor):
         sorted_index = arg_sort(labels)
         indexer = [slice(None)] * self.ndim
         indexer[dim] = sorted_index
-        return self.__getitem__(indexer)
+        return self.__getitem__(tuple(indexer))
 
     def __deepcopy__(self, memo):
         cls = self.__class__

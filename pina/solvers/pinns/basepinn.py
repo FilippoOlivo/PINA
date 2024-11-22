@@ -133,8 +133,9 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         # clamp unknown parameters in InverseProblem (if needed)
         self._clamp_params()
         loss = sum(condition_loss)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True,
-                 logger=True)
+        self.log('train_loss', loss, prog_bar=True, on_epoch=True,
+                 logger=True, batch_size=self.get_batch_size(batch),
+                 sync_dist=True)
 
         return loss
 
@@ -159,8 +160,9 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
         # clamp unknown parameters in InverseProblem (if needed)
 
         loss = sum(condition_loss)
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True,
-                 logger=True)
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True,
+                 logger=True, batch_size=self.get_batch_size(batch),
+                 sync_dist=True)
 
     def loss_data(self, input_pts, output_pts):
         """
@@ -234,7 +236,7 @@ class PINNInterface(SolverInterface, metaclass=ABCMeta):
             prog_bar=True,
             logger=True,
             on_epoch=True,
-            on_step=False,
+            on_step=True,
             batch_size=batch_size,
         )
         self.__logged_res_losses.append(loss_value)
