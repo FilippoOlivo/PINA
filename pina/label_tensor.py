@@ -5,20 +5,8 @@ import torch
 from torch import Tensor
 
 
-full_labels = False
+full_labels = True
 MATH_FUNCTIONS = {torch.sin, torch.cos}
-
-
-def issubset(a, b):
-    """
-    Check if a is a subset of b.
-    """
-    if isinstance(a, list) and isinstance(b, list):
-        return set(a).issubset(set(b))
-    if isinstance(a, range) and isinstance(b, range):
-        return a.start <= b.start and a.stop >= b.stop
-    return False
-
 
 class LabelTensor(torch.Tensor):
     """Torch tensor with a label for any column."""
@@ -55,6 +43,7 @@ class LabelTensor(torch.Tensor):
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
+        # TODO: complete
         if kwargs is None:
             kwargs = {}
         if func in MATH_FUNCTIONS:
@@ -190,6 +179,8 @@ class LabelTensor(torch.Tensor):
             does not match with tensor shape
             """
         tensor_shape = self.shape
+
+        # Set all labels if full_labels is True
         if hasattr(self, 'full') and self.full:
             labels = {
                 i: labels[i] if i in labels else {
@@ -197,27 +188,30 @@ class LabelTensor(torch.Tensor):
                 }
                 for i in range(len(tensor_shape))
             }
+
         for k, v in labels.items():
+
             # Init labels from str
             if isinstance(v, str):
                 v = {'name': v, 'dof': range(tensor_shape[k])}
+
             # Init labels from dict
-            elif isinstance(v, dict) and list(v.keys()) == ['name']:
-                # Init from dict with only name key
-                v['dof'] = range(tensor_shape[k])
-                # Init from dict with both name and dof keys
-            elif isinstance(v, dict) and sorted(list(
-                    v.keys())) == ['dof', 'name']:
-                dof_list = v['dof']
-                dof_len = len(dof_list)
-                if dof_len != len(set(dof_list)):
-                    raise ValueError("dof must be unique")
-                if dof_len != tensor_shape[k]:
-                    raise ValueError(
-                        'Number of dof does not match tensor shape')
+            elif isinstance(v, dict):
+                # Only name of the dimension if provided
+                if list(v.keys()) == ['name']:
+                    v['dof'] = range(tensor_shape[k])
+                # Both name and dof are provided
+                elif sorted(list(v.keys())) == ['dof', 'name']:
+                    dof_list = v['dof']
+                    dof_len = len(dof_list)
+                    if dof_len != len(set(dof_list)):
+                        raise ValueError("dof must be unique")
+                    if dof_len != tensor_shape[k]:
+                        raise ValueError(
+                            'Number of dof does not match tensor shape')
             else:
                 raise ValueError('Illegal labels initialization')
-            # Perform update
+            # Assign labels values
             self._labels[k] = v
 
     def _init_labels_from_list(self, labels):
@@ -242,8 +236,8 @@ class LabelTensor(torch.Tensor):
         Extract the subset of the original tensor by returning all the columns
         corresponding to the passed ``label_to_extract``.
 
-        :param label_to_extract: The label(s) to extract.
-        :type label_to_extract: str | list(str) | tuple(str)
+        :param labels_to_extract: The label(s) to extract.
+        :type labels_to_extract: str | list(str) | tuple(str)
         :raises TypeError: Labels are not ``str``.
         :raises ValueError: Label to extract is not in the labels ``list``.
         """
@@ -343,12 +337,12 @@ class LabelTensor(torch.Tensor):
             stored_labels = [tensor.stored_labels for tensor in tensors]
             keys = stored_labels[0].keys()
 
-            if any(not all(stored_labels[i][k] == stored_labels[0][k] for i in range(len(stored_labels)))
-                   for k in keys if k != dim):
+            if any(not all(stored_labels[i][k] == stored_labels[0][k] for i in
+                        range(len(stored_labels))) for k in keys if k != dim):
                 raise RuntimeError('tensors must have the same shape and dof')
 
             # Copy labels from the first tensor and update the 'dof' for dimension `dim`
-            labels = {k: copy(v) for k, v in stored_labels[0].items()}
+            labels = copy(stored_labels[0])
             if dim in labels:
                 labels_list = [tensor[dim]['dof'] for tensor in stored_labels]
                 last_dim_dof = range(tensor_shape[dim]) if all(isinstance(label, range)
@@ -471,7 +465,8 @@ class LabelTensor(torch.Tensor):
 
         # ---------------------- Start auxiliary function definition -----
         # This method is used to update labels
-    def _update_single_label(self, old_labels, to_update_labels, index, dim, to_update_dim):
+    def _update_single_label(self, old_labels, to_update_labels, index, dim,
+                             to_update_dim):
             """
             TODO
                 :param old_labels: labels from which retrieve data
@@ -491,16 +486,17 @@ class LabelTensor(torch.Tensor):
                 return
             if isinstance(index, int):
                 index = [index]
-
+            print(index)
             if isinstance(index, (list, torch.Tensor)):
                 to_update_labels.update({
                     dim: {
-                        'dof': [old_dof[i] for i in index],
+                        'dof': [old_dof[i] for i in index] if isinstance(old_dof, list) else index,
                         'name': old_labels[dim]['name']
                     }
                 })
                 return
-            raise NotImplementedError(f'Getitem not implemented for {type(index)} values')
+            raise NotImplementedError(f'Getitem not implemented for '
+                                      f'{type(index)} values')
         # ---------------------- End auxiliary function definition -----
 
 
@@ -525,7 +521,8 @@ class LabelTensor(torch.Tensor):
         # Used by DataLoader -> put here for efficiency purpose
         if isinstance(index, list):
             if 0 in labels.keys():
-                self._update_single_label(stored_labels, labels, index, 0, 0)
+                self._update_single_label(stored_labels, labels, index,
+                                          0, 0)
             selected_lt._labels = labels
             return selected_lt
 
