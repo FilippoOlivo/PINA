@@ -48,15 +48,22 @@ class PinaDatasetFactory:
         elif all([isinstance(v['input_points'], list) for v
                   in conditions_dict.values()]):
             return PinaGraphDataset(conditions_dict, **kwargs)
+        else:
+            raise ValueError('Conditions must be either tensors or lists of Data objects')
 
 class PinaTensorDataset(PinaDataset):
     def __init__(self, conditions_dict, max_conditions_lengths):
         super().__init__(conditions_dict, max_conditions_lengths)
+
     def __getitem__(self, idx):
         """
         Getitem method for large batch size
         """
-
+        if isinstance(idx, int):
+            return {
+                k: {k_data: v[k_data][idx % len(v['input_points'])] for k_data
+                    in v.keys()} for k, v in self.conditions_dict.items()
+            }
         to_return_dict = {}
         for condition, data in self.conditions_dict.items():
             cond_idx = idx[:self.max_conditions_lengths[condition]]
@@ -76,6 +83,8 @@ class PinaGraphDataset(PinaDataset):
         """
         Getitem method for large batch size
         """
+        if isinstance(idx, int):
+            idx = [idx]
         to_return_dict = {}
         for condition, data in self.conditions_dict.items():
             cond_idx = idx[:self.max_conditions_lengths[condition]]
