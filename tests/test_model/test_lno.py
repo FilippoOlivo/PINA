@@ -114,7 +114,6 @@ def test_forward():
     assert out.shape == torch.Size(
         [batch_size, input_.shape[1], len(field_indices)])
 
-
 def test_backward():
     lifting_net = torch.nn.Linear(len(coordinates_indices) + len(field_indices),
                                   embedding_dim)

@@ -2,13 +2,10 @@ import logging
 from lightning.pytorch import LightningDataModule
 import math
 import torch
-from torch_geometric.data.collate import collate
-
 from ..label_tensor import LabelTensor
 from torch.utils.data import DataLoader, BatchSampler, SequentialSampler, \
     RandomSampler
 from torch.utils.data.distributed import DistributedSampler
-from functools import partial
 from .dataset import PinaDatasetFactory
 
 class Collator:
@@ -38,7 +35,8 @@ class Collator:
             condition_args = batch[0][condition_name].keys()
             for arg in condition_args:
                 data_list = [batch[idx][condition_name][arg] for idx in range(
-                    min(len(batch), self.max_conditions_lengths[condition_name]))]
+                    min(len(batch),
+                    self.max_conditions_lengths[condition_name]))]
                 if isinstance(data_list[0], LabelTensor):
                     single_cond_dict[arg] = LabelTensor.stack(data_list)
                 elif isinstance(data_list[0], torch.Tensor):
@@ -58,7 +56,8 @@ class Collator:
 class PinaBatchSampler(BatchSampler):
     def __init__(self, dataset, batch_size, shuffle, sampler=None):
         if sampler is None:
-            if torch.distributed.is_available() and torch.distributed.is_initialized():
+            if (torch.distributed.is_available() and
+                    torch.distributed.is_initialized()):
                 rank = torch.distributed.get_rank()
                 world_size = torch.distributed.get_world_size()
                 sampler = DistributedSampler(dataset, shuffle=shuffle,

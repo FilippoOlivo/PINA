@@ -118,6 +118,8 @@ class LowRankBlock(torch.nn.Module):
         :return: The output tensor obtained from Average Neural Operator Block.
         :rtype: torch.Tensor
         """
+        coords = coords.as_subclass(torch.Tensor)
+        x = x.as_subclass(torch.Tensor)
         # extract basis
         basis = self._basis(coords)
         # reshape [B, N, D, 2*rank]

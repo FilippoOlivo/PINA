@@ -15,4 +15,4 @@ class GraphSupervisedSolver(SupervisedSolver):
         super().__init__(problem, model, loss, optimizer, scheduler, use_lt=use_lt)
 
     def forward(self, batch):
-        return self._model(batch.x, batch.edge_index, batch.batch)
+        return self._model(batch)
