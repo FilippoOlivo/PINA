@@ -11,10 +11,9 @@ from .dataset import PinaDatasetFactory
 class Collator:
     def __init__(self, max_conditions_lengths, ):
         self.max_conditions_lengths = max_conditions_lengths
-        if self.max_conditions_lengths is None:
-            setattr(self, '__call__', self.collate_custom_dataloader)
-        else:
-            setattr(self, '__call__', self._collate_standard_dataloader)
+        self.callable_function = self.collate_custom_dataloader if \
+            max_conditions_lengths is None else (
+            self._collate_standard_dataloader)
 
     @staticmethod
     def collate_custom_dataloader(batch):
@@ -48,9 +47,7 @@ class Collator:
         return batch_dict
 
     def __call__(self, batch):
-        if self.max_conditions_lengths is None:
-            return self.collate_custom_dataloader(batch)
-        return self._collate_standard_dataloader(batch)
+        return self.callable_function(batch)
 
 
 class PinaBatchSampler(BatchSampler):
