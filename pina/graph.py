@@ -257,6 +257,8 @@ class RadiusGraph(Graph):
         """
         dist = torch.cdist(points, points, p=2)
         edge_index = torch.nonzero(dist <= r, as_tuple=False).t()
+        if isinstance(edge_index, LabelTensor):
+            edge_index = edge_index.tensor
         return edge_index
 
 
@@ -292,4 +294,6 @@ class KNNGraph(Graph):
         row = torch.arange(points.size(0)).repeat_interleave(k)
         col = knn_indices.flatten()
         edge_index = torch.stack([row, col], dim=0)
+        if isinstance(edge_index, LabelTensor):
+            edge_index = edge_index.tensor
         return edge_index

@@ -123,11 +123,15 @@ class PinaGraphDataset(PinaDataset):
         ex_data = conditions_dict[list(conditions_dict.keys())[
             0]]['output_points'][0]
         if isinstance(ex_data, LabelTensor):
-            self.out_labels = ex_data.labels 
-        
+            self.out_labels = ex_data.labels
+
         if self.in_labels != {}:
-            
-            self._create_graph_batch_from_list = self._labelise_batch(self._create_graph_batch_from_list)
+            self._create_graph_batch_from_list = self._labelise_batch(
+                self._create_graph_batch_from_list)
+
+        if self.out_labels != {}:
+            self._create_output_batch = self._labelise_tensor(
+                self._create_output_batch)
 
     def fetch_from_idx_list(self, idx):
         to_return_dict = {}
@@ -180,7 +184,7 @@ class PinaGraphDataset(PinaDataset):
                 batch[k] = tmp
             return batch
         return wrapper
-    
+
     def _labelise_tensor(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
