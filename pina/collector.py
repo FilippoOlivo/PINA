@@ -53,8 +53,8 @@ class Collector:
                 # get data
                 keys = condition.__slots__
                 values = [getattr(condition, name) for name in keys]
-                values = values if not isinstance(
-                    values, Graph) else values.data
+                values = values.data if isinstance(
+                    values, Graph) else values
                 self.data_collections[condition_name] = dict(zip(keys, values))
                 # condition now is ready
                 self._is_conditions_ready[condition_name] = True
