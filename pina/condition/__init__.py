@@ -4,9 +4,11 @@ __all__ = [
     "DomainEquationCondition",
     "InputPointsEquationCondition",
     "InputOutputPointsCondition",
+    "GraphInputOutputCondition",
 ]
 
 from .condition_interface import ConditionInterface
 from .domain_equation_condition import DomainEquationCondition
 from .input_equation_condition import InputPointsEquationCondition
 from .input_output_condition import InputOutputPointsCondition
+from .graph_condition import GraphInputOutputCondition

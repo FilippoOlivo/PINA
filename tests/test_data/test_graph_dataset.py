@@ -11,6 +11,8 @@ input_ = [
     for x_, pos_ in zip(x, pos)
 ]
 output_ = torch.rand((100, 20, 10))
+input_ = KNNGraph(x=x, pos=pos, k=3, build_edge_attr=True, y=output_)
+
 
 x_2 = torch.rand((50, 20, 10))
 pos_2 = torch.rand((50, 20, 2))
@@ -19,6 +21,7 @@ input_2_ = [
     for x_, pos_ in zip(x_2, pos_2)
 ]
 output_2_ = torch.rand((50, 20, 10))
+input_2_ = KNNGraph(x=x_2, pos=pos_2, k=3, build_edge_attr=True, y=output_2_)
 
 
 # Problem with a single condition

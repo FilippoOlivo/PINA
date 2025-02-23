@@ -1,3 +1,4 @@
+from pina import LabelTensor
 import torch
 import pytest
 from pina.data import PinaDataModule
@@ -19,6 +20,7 @@ input_graph = [
     RadiusGraph(x=x_, pos=pos_, radius=0.2) for x_, pos_, in zip(x, pos)
 ]
 output_graph = torch.rand((100, 50, 10))
+input_graph = RadiusGraph(x, pos, r=0.1, build_edge_attr=True, y=output_graph)
 
 
 @pytest.mark.parametrize(
@@ -26,8 +28,14 @@ output_graph = torch.rand((100, 50, 10))
     [(input_tensor, output_tensor), (input_graph, output_graph)],
 )
 def test_constructor(input_, output_):
-    problem = SupervisedProblem(input_=input_, output_=output_)
+    if output_ is None:
+        problem = SupervisedProblem(graph_=input_)
+    else:
+        problem = SupervisedProblem(input_=input_, output_=output_)
     PinaDataModule(problem)
+
+
+test_constructor(input_tensor, output_tensor)
 
 
 @pytest.mark.parametrize(
@@ -99,7 +107,10 @@ def test_setup_test(input_, output_, train_size, val_size, test_size):
     [(input_tensor, output_tensor), (input_graph, output_graph)],
 )
 def test_dummy_dataloader(input_, output_):
-    problem = SupervisedProblem(input_=input_, output_=output_)
+    if output_ is None:
+        problem = SupervisedProblem(graph_=input_)
+    else:
+        problem = SupervisedProblem(input_=input_, output_=output_)
     solver = SupervisedSolver(problem=problem, model=torch.nn.Linear(10, 10))
     trainer = Trainer(
         solver, batch_size=None, train_size=0.7, val_size=0.3, test_size=0.0
@@ -138,7 +149,10 @@ def test_dummy_dataloader(input_, output_):
 )
 @pytest.mark.parametrize("automatic_batching", [True, False])
 def test_dataloader(input_, output_, automatic_batching):
-    problem = SupervisedProblem(input_=input_, output_=output_)
+    if output_ is None:
+        problem = SupervisedProblem(graph_=input_)
+    else:
+        problem = SupervisedProblem(input_=input_, output_=output_)
     solver = SupervisedSolver(problem=problem, model=torch.nn.Linear(10, 10))
     trainer = Trainer(
         solver,
@@ -174,7 +188,6 @@ def test_dataloader(input_, output_, automatic_batching):
     assert isinstance(data["data"]["output_points"], torch.Tensor)
 
 
-from pina import LabelTensor
 
 input_tensor = LabelTensor(torch.rand((100, 3)), ["u", "v", "w"])
 output_tensor = LabelTensor(torch.rand((100, 3)), ["u", "v", "w"])
@@ -193,7 +206,10 @@ output_graph = LabelTensor(torch.rand((100, 50, 3)), ["u", "v", "w"])
 )
 @pytest.mark.parametrize("automatic_batching", [True, False])
 def test_dataloader_labels(input_, output_, automatic_batching):
-    problem = SupervisedProblem(input_=input_, output_=output_)
+    if output_ is None:
+        problem = SupervisedProblem(graph_=input_)
+    else:
+        problem = SupervisedProblem(input_=input_, output_=output_)
     solver = SupervisedSolver(problem=problem, model=torch.nn.Linear(10, 10))
     trainer = Trainer(
         solver,

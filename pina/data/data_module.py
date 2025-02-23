@@ -84,39 +84,39 @@ class Collator:
         conditions_names = batch[0].keys()
         # Condition names
         for condition_name in conditions_names:
-            single_cond_dict = {}
             condition_args = batch[0][condition_name].keys()
-            for arg in condition_args:
-                data_list = [
-                    batch[idx][condition_name][arg]
-                    for idx in range(
-                        min(
-                            len(batch),
-                            self.max_conditions_lengths[condition_name],
-                        )
-                    )
-                ]
-                single_cond_dict[arg] = self._collate(data_list)
-
-            batch_dict[condition_name] = single_cond_dict
+            batch_dict[condition_name] = self._collate(
+                condition_args, condition_name, batch
+            )
         return batch_dict
 
-    @staticmethod
-    def _collate_tensor_dataset(data_list):
-        if isinstance(data_list[0], LabelTensor):
-            return LabelTensor.stack(data_list)
-        if isinstance(data_list[0], torch.Tensor):
-            return torch.stack(data_list)
-        raise RuntimeError("Data must be Tensors or LabelTensor ")
+    def _collate_tensor_dataset(self, condition_args, condition_name, batch):
+        to_return_dict = {}
+        for arg in condition_args:
+            data_list = [
+                batch[idx][condition_name][arg]
+                for idx in range(
+                    min(len(batch), self.max_conditions_lengths[condition_name])
+                )
+            ]
+            if isinstance(data_list[0], LabelTensor):
+                data = LabelTensor.stack(data_list)
+            elif isinstance(data_list[0], torch.Tensor):
+                data = torch.stack(data_list)
 
-    def _collate_graph_dataset(self, data_list):
-        if isinstance(data_list[0], LabelTensor):
-            return LabelTensor.cat(data_list)
-        if isinstance(data_list[0], torch.Tensor):
-            return torch.cat(data_list)
-        if isinstance(data_list[0], Data):
-            return self.dataset.create_graph_batch(data_list)
-        raise RuntimeError("Data must be Tensors or LabelTensor or pyG Data")
+            to_return_dict[arg] = data
+        return to_return_dict
+
+    def _collate_graph_dataset(self, condition_args, condition_name, batch):
+        data_list = [
+            batch[idx][condition_name]["graph"]
+            for idx in range(
+                min(len(batch), self.max_conditions_lengths[condition_name])
+            )
+        ]
+        return self.dataset._divide_batch(
+            batch=self.dataset.create_graph_batch(data_list)
+        )
 
     def __call__(self, batch):
         return self.callable_function(batch)
@@ -285,7 +285,7 @@ class PinaDataModule(LightningDataModule):
 
     @staticmethod
     def _split_condition(condition_dict, splits_dict):
-        len_condition = len(condition_dict["input_points"])
+        len_condition = len(list(condition_dict.values())[0])
 
         lengths = [
             int(len_condition * length) for length in splits_dict.values()
@@ -343,7 +343,7 @@ class PinaDataModule(LightningDataModule):
             condition_name,
             condition_dict,
         ) in collector.data_collections.items():
-            len_data = len(condition_dict["input_points"])
+            len_data = len(list(condition_dict.values())[0])
             if self.shuffle:
                 _apply_shuffle(condition_dict, len_data)
             for key, data in self._split_condition(
@@ -390,12 +390,12 @@ class PinaDataModule(LightningDataModule):
         max_conditions_lengths = {}
         for k, v in self.collector_splits[split].items():
             if self.batch_size is None:
-                max_conditions_lengths[k] = len(v["input_points"])
+                max_conditions_lengths[k] = len(list(v.values())[0])
             elif self.repeat:
                 max_conditions_lengths[k] = self.batch_size
             else:
                 max_conditions_lengths[k] = min(
-                    len(v["input_points"]), self.batch_size
+                    len(list(v.values())[0]), self.batch_size
                 )
         return max_conditions_lengths
 

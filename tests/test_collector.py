@@ -119,6 +119,7 @@ def test_supervised_graph_collector():
     x = [torch.rand((50, 3)) for _ in range(10)]
     graph_list_2 = [RadiusGraph(pos=pos, radius=0.4, x=x_) for x_ in x]
     out_2 = torch.rand((10, 50, 3))
+    graph_list_2 = RadiusGraph(pos=pos, x=x, r=0.4, y=out_2)
 
     class SupervisedProblem(AbstractProblem):
         output_variables = None
