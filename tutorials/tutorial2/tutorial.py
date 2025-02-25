@@ -22,18 +22,21 @@ if IN_COLAB:
   get_ipython().system('pip install "pina-mathlab"')
 
 import torch
-from torch.nn import Softplus
+import matplotlib.pyplot as plt
+import warnings
 
 from pina.problem import SpatialProblem
-from pina.operators import laplacian
+from pina.operator import laplacian
 from pina.model import FeedForward
-from pina.solvers import PINN
+from pina.solver import PINN
 from pina.trainer import Trainer
-from pina.plotter import Plotter
 from pina.domain import CartesianDomain
 from pina.equation import Equation, FixedValue
 from pina import Condition, LabelTensor
-from pina.callbacks import MetricTracker
+from torch.nn import Softplus
+from lightning.pytorch.loggers import TensorBoardLogger
+
+warnings.filterwarnings('ignore')
 
 
 # ## The problem definition
@@ -83,41 +86,76 @@ class Poisson(SpatialProblem):
 problem = Poisson()
 
 # let's discretise the domain
-problem.discretise_domain(25, 'grid', locations=['phys_cond'])
-problem.discretise_domain(25, 'grid', locations=['bound_cond1', 'bound_cond2', 'bound_cond3', 'bound_cond4'])
+problem.discretise_domain(25, 'grid', domains=['phys_cond'])
+problem.discretise_domain(25, 'grid', domains=['bound_cond1', 'bound_cond2', 'bound_cond3', 'bound_cond4'])
 
 
 # ## Solving the problem with standard PINNs
 
 # After the problem, the feed-forward neural network is defined, through the class `FeedForward`. This neural network takes as input the coordinates (in this case $x$ and $y$) and provides the unkwown field of the Poisson problem. The residual of the equations are evaluated at several sampling points (which the user can manipulate using the method `CartesianDomain_pts`) and the loss minimized by the neural network is the sum of the residuals.
 # 
-# In this tutorial, the neural network is composed by two hidden layers of 10 neurons each, and it is trained for 1000 epochs with a learning rate of 0.006 and $l_2$ weight regularization set to $10^{-8}$. These parameters can be modified as desired. We use the `MetricTracker` class to track the metrics during training.
+# In this tutorial, the neural network is composed by two hidden layers of 10 neurons each, and it is trained for 1000 epochs with a learning rate of 0.006 and $l_2$ weight regularization set to $10^{-8}$. These parameters can be modified as desired. 
 
 # In[3]:
 
 
 # make model + solver + trainer
+from pina.optim import TorchOptimizer
 model = FeedForward(
     layers=[10, 10],
     func=Softplus,
     output_dimensions=len(problem.output_variables),
     input_dimensions=len(problem.input_variables)
 )
-pinn = PINN(problem, model, optimizer_kwargs={'lr':0.006, 'weight_decay':1e-8})
-trainer = Trainer(pinn, max_epochs=1000, callbacks=[MetricTracker()], accelerator='cpu', enable_model_summary=False) # we train on CPU and avoid model summary at beginning of training (optional)
+pinn = PINN(problem, model, optimizer=TorchOptimizer(torch.optim.Adam, lr=0.006,weight_decay=1e-8))
+trainer = Trainer(pinn, max_epochs=1000, accelerator='cpu', enable_model_summary=False, # we train on CPU and avoid model summary at beginning of training (optional)
+    train_size=1.0,
+    val_size=0.0,
+    test_size=0.0,
+    logger=TensorBoardLogger("tutorial_logs")
+) 
 
 # train
 trainer.train()
 
 
-# Now the `Plotter` class is used to plot the results.
+# Now we plot the results using `matplotlib`.
 # The solution predicted by the neural network is plotted on the left, the exact one is represented at the center and on the right the error between the exact and the predicted solutions is showed. 
 
 # In[4]:
 
 
-plotter = Plotter()
-plotter.plot(solver=pinn)
+@torch.no_grad()
+def plot_solution(solver):
+    # get the problem
+    problem = solver.problem
+    # get spatial points
+    spatial_samples = problem.spatial_domain.sample(30, "grid")
+    # compute pinn solution, true solution and absolute difference
+    data = {
+        "PINN solution": solver(spatial_samples),
+        "True solution": problem.truth_solution(spatial_samples),
+        "Absolute Difference": torch.abs(
+            solver(spatial_samples) - problem.truth_solution(spatial_samples)
+        )
+    }
+    # plot the solution
+    for idx, (title, field) in enumerate(data.items()):
+        plt.subplot(1, 3, idx + 1)
+        plt.title(title)
+        plt.tricontourf(  # convert to torch tensor + flatten
+            spatial_samples.extract("x").tensor.flatten(),
+            spatial_samples.extract("y").tensor.flatten(),
+            field.tensor.flatten(),
+        )
+        plt.colorbar(), plt.tight_layout()
+
+
+# In[5]:
+
+
+plt.figure(figsize=(12, 6))
+plot_solution(solver=pinn)
 
 
 # ## Solving the problem with extra-features PINNs
@@ -132,12 +170,11 @@ plotter.plot(solver=pinn)
 # 
 # where $x$ and $y$ are the spatial coordinates and $k(x, y)$ is the added feature. 
 # 
-# This feature is initialized in the class `SinSin`, which needs to be inherited by the `torch.nn.Module` class and to have the `forward` method. After declaring such feature, we can just incorporate in the `FeedForward` class thanks to the `extra_features` argument.
-# **NB**: `extra_features` always needs a `list` as input, you you have one feature just encapsulated it in a class, as in the next cell.
+# This feature is initialized in the class `SinSin`, which needs to be inherited by the `torch.nn.Module` class and to have the `forward` method. After declaring such feature, we can just adjust the `FeedForward` class by creating a subclass `FeedForwardWithExtraFeatures` with an adjusted forward method and the additional attribute `extra_features`.
 # 
 # Finally, we perform the same training as before: the problem is `Poisson`, the network is composed by the same number of neurons and optimizer parameters are equal to previous test, the only change is the new extra feature.
 
-# In[5]:
+# In[6]:
 
 
 class SinSin(torch.nn.Module):
@@ -150,28 +187,46 @@ class SinSin(torch.nn.Module):
              torch.sin(x.extract(['y'])*torch.pi))
         return LabelTensor(t, ['sin(x)sin(y)'])
 
+class FeedForwardWithExtraFeatures(FeedForward):
+    def __init__(self, input_dimensions, output_dimensions, func, layers, extra_features):
 
-# make model + solver + trainer
-model_feat = FeedForward(
-    layers=[10, 10],
-    func=Softplus,
+        super().__init__(input_dimensions=input_dimensions, 
+                         output_dimensions=output_dimensions, 
+                         func=func, 
+                         layers=layers) 
+        self.extra_features = extra_features
+
+    def forward(self, x):
+        
+        extra_feature = self.extra_features[0](x)
+        x = x.append(extra_feature)
+        return super().forward(x)
+    
+model_feat = FeedForwardWithExtraFeatures(
+    input_dimensions=len(problem.input_variables) + 1, #we add one as also we consider the extra feature dimension
     output_dimensions=len(problem.output_variables),
-    input_dimensions=len(problem.input_variables)+1
-)
-pinn_feat = PINN(problem, model_feat, extra_features=[SinSin()], optimizer_kwargs={'lr':0.006, 'weight_decay':1e-8})
-trainer_feat = Trainer(pinn_feat, max_epochs=1000, callbacks=[MetricTracker()], accelerator='cpu', enable_model_summary=False) # we train on CPU and avoid model summary at beginning of training (optional)
+    func=Softplus,
+    layers=[10, 10],
+    extra_features=[SinSin()])
 
-# train
+pinn_feat = PINN(problem, model_feat, optimizer=TorchOptimizer(torch.optim.Adam, lr=0.006,weight_decay=1e-8))
+trainer_feat = Trainer(pinn_feat, max_epochs=1000, accelerator='cpu', enable_model_summary=False,
+    train_size=1.0,
+    val_size=0.0,
+    test_size=0.0,
+    logger=TensorBoardLogger("tutorial_logs")) # we train on CPU and avoid model summary at beginning of training (optional)
+
 trainer_feat.train()
 
 
 # The predicted and exact solutions and the error between them are represented below.
 # We can easily note that now our network, having almost the same condition as before, is able to reach additional order of magnitudes in accuracy.
 
-# In[6]:
+# In[7]:
 
 
-plotter.plot(solver=pinn_feat)
+plt.figure(figsize=(12, 6))
+plot_solution(solver=pinn_feat)
 
 
 # ## Solving the problem with learnable extra-features PINNs
@@ -188,7 +243,7 @@ plotter.plot(solver=pinn_feat)
 # where $\alpha$ and $\beta$ are the abovementioned parameters.
 # Their implementation is quite trivial: by using the class `torch.nn.Parameter` we cam define all the learnable parameters we need, and they are managed by `autograd` module!
 
-# In[7]:
+# In[8]:
 
 
 class SinSinAB(torch.nn.Module):
@@ -208,14 +263,19 @@ class SinSinAB(torch.nn.Module):
 
 
 # make model + solver + trainer
-model_lean= FeedForward(
-    layers=[10, 10],
-    func=Softplus,
+model_learn = FeedForwardWithExtraFeatures(
+    input_dimensions=len(problem.input_variables) + 1, #we add one as also we consider the extra feature dimension
     output_dimensions=len(problem.output_variables),
-    input_dimensions=len(problem.input_variables)+1
-)
-pinn_lean = PINN(problem, model_lean, extra_features=[SinSinAB()], optimizer_kwargs={'lr':0.006, 'weight_decay':1e-8})
-trainer_learn = Trainer(pinn_lean, max_epochs=1000, accelerator='cpu', enable_model_summary=False) # we train on CPU and avoid model summary at beginning of training (optional)
+    func=Softplus,
+    layers=[10, 10],
+    extra_features=[SinSinAB()])
+
+pinn_learn = PINN(problem, model_learn, optimizer=TorchOptimizer(torch.optim.Adam, lr=0.006,weight_decay=1e-8))
+trainer_learn = Trainer(pinn_learn, max_epochs=1000, enable_model_summary=False,
+    train_size=1.0,
+    val_size=0.0,
+    test_size=0.0,
+    logger=TensorBoardLogger("tutorial_logs")) # we train on CPU and avoid model summary at beginning of training (optional)
 
 # train
 trainer_learn.train()
@@ -223,18 +283,22 @@ trainer_learn.train()
 
 # Umh, the final loss is not appreciabily better than previous model (with static extra features), despite the usage of learnable parameters. This is mainly due to the over-parametrization of the network: there are many parameter to optimize during the training, and the model in unable to understand automatically that only the parameters of the extra feature (and not the weights/bias of the FFN) should be tuned in order to fit our problem. A longer training can be helpful, but in this case the faster way to reach machine precision for solving the Poisson problem is removing all the hidden layers in the `FeedForward`, keeping only the $\alpha$ and $\beta$ parameters of the extra feature.
 
-# In[8]:
+# In[9]:
 
 
 # make model + solver + trainer
-model_lean= FeedForward(
+model_learn= FeedForwardWithExtraFeatures(
     layers=[],
     func=Softplus,
     output_dimensions=len(problem.output_variables),
-    input_dimensions=len(problem.input_variables)+1
-)
-pinn_learn = PINN(problem, model_lean, extra_features=[SinSinAB()], optimizer_kwargs={'lr':0.01, 'weight_decay':1e-8})
-trainer_learn = Trainer(pinn_learn, max_epochs=1000, callbacks=[MetricTracker()], accelerator='cpu', enable_model_summary=False) # we train on CPU and avoid model summary at beginning of training (optional)
+    input_dimensions=len(problem.input_variables)+1,
+    extra_features=[SinSinAB()])
+pinn_learn = PINN(problem, model_learn, optimizer=TorchOptimizer(torch.optim.Adam, lr=0.006,weight_decay=1e-8))
+trainer_learn = Trainer(pinn_learn, max_epochs=1000, accelerator='cpu', enable_model_summary=False,
+    train_size=1.0,
+    val_size=0.0,
+    test_size=0.0,
+    logger=TensorBoardLogger("tutorial_logs")) # we train on CPU and avoid model summary at beginning of training (optional)
 
 # train
 trainer_learn.train()
@@ -245,20 +309,13 @@ trainer_learn.train()
 # 
 # We conclude here by showing the graphical comparison of the unknown field and the loss trend for all the test cases presented here: the standard PINN, PINN with extra features, and PINN with learnable extra features.
 
-# In[9]:
-
-
-plotter.plot(solver=pinn_learn)
-
-
 # Let us compare the training losses for the various types of training
 
-# In[10]:
+# In[ ]:
 
 
-plotter.plot_loss(trainer, logy=True, label='Standard')
-plotter.plot_loss(trainer_feat, logy=True,label='Static Features')
-plotter.plot_loss(trainer_learn, logy=True, label='Learnable Features')
+print('To load TensorBoard run load_ext tensorboard on your terminal')
+print("To visualize the loss you can run tensorboard --logdir 'tutorial_logs' on your terminal")
 
 
 # ## What's next?

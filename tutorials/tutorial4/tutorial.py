@@ -9,7 +9,7 @@
 
 # First of all we import the modules needed for the tutorial:
 
-# In[ ]:
+# In[1]:
 
 
 ## routine needed to run the notebook on Google Colab
@@ -23,14 +23,17 @@ if IN_COLAB:
 
 import torch 
 import matplotlib.pyplot as plt 
-plt.style.use('tableau-colorblind10')
+import torchvision # for MNIST dataset
+import warnings
+
 from pina.problem import AbstractProblem
-from pina.solvers import SupervisedSolver
+from pina.solver import SupervisedSolver
 from pina.trainer import Trainer
 from pina import Condition, LabelTensor
-from pina.model.layers import ContinuousConvBlock 
-import torchvision # for MNIST dataset
+from pina.model.block import ContinuousConvBlock 
 from pina.model import FeedForward # for building AE and MNIST classification
+
+warnings.filterwarnings('ignore')
 
 
 # The tutorial is structured as follow: 
@@ -476,7 +479,7 @@ class Decoder(torch.nn.Module):
 
 # Very good! Notice that in the `Decoder` class in the `forward` pass we have used the `.transpose()` method of the `ContinuousConvolution` class. This method accepts the `weights` for upsampling and the `grid` on where to upsample. Let's now build the autoencoder! We set the hidden dimension in the `hidden_dimension` variable. We apply the sigmoid on the output since the field value is between $[0, 1]$. 
 
-# In[17]:
+# In[14]:
 
 
 class Autoencoder(torch.nn.Module):
@@ -500,27 +503,31 @@ net = Autoencoder()
 
 # Let's now train the autoencoder, minimizing the mean square error loss and optimizing using Adam. We use the `SupervisedSolver` as solver, and the problem is a simple problem created by inheriting from `AbstractProblem`. It takes approximately two minutes to train on CPU.
 
-# In[19]:
+# In[15]:
 
 
 # define the problem
 class CircleProblem(AbstractProblem):
     input_variables = ['x', 'y', 'f']
     output_variables = input_variables
-    conditions = {'data' : Condition(input_points=LabelTensor(input_data, input_variables), output_points=LabelTensor(input_data, output_variables))}
+    al=LabelTensor(input_data, input_variables)
+    conditions = {'data' : Condition(input=LabelTensor(input_data, input_variables), target=LabelTensor(input_data, output_variables))}
 
 # define the solver
-solver = SupervisedSolver(problem=CircleProblem(), model=net, loss=torch.nn.MSELoss())          
+solver = SupervisedSolver(problem=CircleProblem(), model=net, loss=torch.nn.MSELoss(), use_lt=True)          
 
 # train
-trainer = Trainer(solver, max_epochs=150, accelerator='cpu', enable_model_summary=False) # we train on CPU and avoid model summary at beginning of training (optional)
+trainer = Trainer(solver, max_epochs=150, accelerator='cpu', enable_model_summary=False, # we train on CPU and avoid model summary at beginning of training (optional)
+            train_size=1.0,
+            val_size=0.0,
+            test_size=0.0)
 trainer.train()
         
 
 
 # Let's visualize the two solutions side by side!
 
-# In[20]:
+# In[16]:
 
 
 net.eval()
@@ -543,7 +550,7 @@ plt.show()
 
 # As we can see, the two solutions are really similar! We can compute the $l_2$ error quite easily as well:
 
-# In[21]:
+# In[17]:
 
 
 def l2_error(input_, target):
@@ -559,7 +566,7 @@ print(f'l2 error: {l2_error(input_data[0, 0, :, -1], output[0, 0, :, -1]):.2%}')
 # 
 # Suppose we have already the hidden representation and we want to upsample on a differen grid with more points. Let's see how to do it:
 
-# In[22]:
+# In[18]:
 
 
 # setting the seed
@@ -592,7 +599,7 @@ plt.show()
 
 # As we can see we have a very good approximation of the original function, even thought some noise is present. Let's calculate the error now:
 
-# In[23]:
+# In[19]:
 
 
 print(f'l2 error: {l2_error(input_data2[0, 0, :, -1], output[0, 0, :, -1]):.2%}')
@@ -601,7 +608,7 @@ print(f'l2 error: {l2_error(input_data2[0, 0, :, -1], output[0, 0, :, -1]):.2%}'
 # ### Autoencoding at different resolutions
 # In the previous example we already had the hidden representation (of the original input) and we used it to upsample. Sometimes however we could have a finer mesh solution and we would simply want to encode it. This can be done without retraining! This procedure can be useful in case we have many points in the mesh and just a smaller part of them are needed for training. Let's see the results of this:
 
-# In[ ]:
+# In[20]:
 
 
 # setting the seed
@@ -632,8 +639,7 @@ plt.tight_layout()
 plt.show()
 
 # calculate l2 error
-print(
-    f'l2 error: {l2_error(input_data2[0, 0, :, -1], output[0, 0, :, -1]):.2%}')
+print(f'l2 error: {l2_error(input_data2[0, 0, :, -1], output[0, 0, :, -1]):.2%}')
 
 
 # ## What's next?

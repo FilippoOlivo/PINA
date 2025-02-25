@@ -32,13 +32,16 @@ if IN_COLAB:
 
 import torch
 import matplotlib.pyplot as plt
-plt.style.use('tableau-colorblind10')
+import warnings
+
 from scipy import io
 from pina import Condition, LabelTensor
 from pina.problem import AbstractProblem
 from pina.model import AveragingNeuralOperator
-from pina.solvers import SupervisedSolver
+from pina.solver import SupervisedSolver
 from pina.trainer import Trainer
+
+warnings.filterwarnings('ignore')
 
 
 # ## Data Generation
@@ -81,7 +84,7 @@ from pina.trainer import Trainer
 
 
 # load data
-data=io.loadmat("dat/Data_KS.mat")
+data=io.loadmat("data/Data_KS.mat")
 
 # converting to label tensor
 initial_cond_train = LabelTensor(torch.tensor(data['initial_cond_train'], dtype=torch.float), ['t','x','u0'])
@@ -203,7 +206,7 @@ model = AveragingNeuralOperator(lifting_net=lifting_net,
 # We will now focus on solving the KS equation using the `SupervisedSolver` class
 # and the `AveragingNeuralOperator` model. As done in the [FNO tutorial](https://github.com/mathLab/PINA/blob/master/tutorials/tutorial5/tutorial.ipynb) we now create the `NeuralOperatorProblem` class with `AbstractProblem`.
 
-# In[6]:
+# In[5]:
 
 
 # expected running time ~ 1 minute
@@ -211,22 +214,25 @@ model = AveragingNeuralOperator(lifting_net=lifting_net,
 class NeuralOperatorProblem(AbstractProblem):
     input_variables = initial_cond_train.labels
     output_variables = sol_train.labels
-    conditions = {'data' : Condition(input_points=initial_cond_train, 
-                                     output_points=sol_train)}
+    conditions = {'data' : Condition(input=initial_cond_train, 
+                                     target=sol_train)}
 
 
 # initialize problem
 problem = NeuralOperatorProblem()
 # initialize solver
-solver = SupervisedSolver(problem=problem, model=model,optimizer_kwargs={"lr":0.001})
+solver = SupervisedSolver(problem=problem, model=model)
 # train, only CPU and avoid model summary at beginning of training (optional)
-trainer = Trainer(solver=solver, max_epochs=40, accelerator='cpu', enable_model_summary=False, log_every_n_steps=-1, batch_size=5) # we train on CPU and avoid model summary at beginning of training (optional)
+trainer = Trainer(solver=solver, max_epochs=40, accelerator='cpu', enable_model_summary=False, log_every_n_steps=-1, batch_size=5, # we train on CPU and avoid model summary at beginning of training (optional)
+train_size=1.0,
+val_size=0.0,
+test_size=0.0)
 trainer.train()
 
 
 # We can now see some plots for the solutions
 
-# In[7]:
+# In[6]:
 
 
 sample_number = 2
@@ -236,13 +242,13 @@ plot_trajectory(coords=initial_cond_test[sample_number].extract(['x', 't']),
                 no_sol=no_sol[5])
 
 
-# As we can see we can obtain nice result considering the small trainint time and the difficulty of the problem!
-# Let's see how the training and testing error:
+# As we can see we can obtain nice result considering the small training time and the difficulty of the problem!
+# Let's take a look at the training and testing error:
 
-# In[8]:
+# In[7]:
 
 
-from pina.loss.loss_interface import PowerLoss
+from pina.loss import PowerLoss
 
 error_metric = PowerLoss(p=2)                                                   # we use the MSE loss
 
@@ -255,14 +261,14 @@ with torch.no_grad():
     print(f'Testing error: {float(err_test):.3f}')
 
 
-# as we can see the error is pretty small, which agrees with what we can see from the previous plots.
+# As we can see the error is pretty small, which agrees with what we can see from the previous plots.
 
 # ## What's next?
 # 
 # Now you know how to solve a time dependent neural operator problem in **PINA**! There are multiple directions you can go now:
 # 
-# 1. Train the network for longer or with different layer sizes and assert the finaly accuracy
+# 1. Train the network for longer or with different layer sizes and assert the final accuracy
 # 
-# 2. We left a more challenging dataset [Data_KS2.mat](dat/Data_KS2.mat) where $A_k \in [-0.5, 0.5]$, $\ell_k \in [1, 2, 3]$, $\phi_k \in [0, 2\pi]$ for loger training
+# 2. We left a more challenging dataset [Data_KS2.mat](dat/Data_KS2.mat) where $A_k \in [-0.5, 0.5]$, $\ell_k \in [1, 2, 3]$, $\phi_k \in [0, 2\pi]$ for longer training
 # 
 # 3. Compare the performance between the different neural operators (you can even try to implement your favourite one!)

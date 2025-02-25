@@ -9,7 +9,7 @@
 # In this tutorial we are going to solve the Darcy flow problem in two dimensions, presented in [*Fourier Neural Operator for
 # Parametric Partial Differential Equation*](https://openreview.net/pdf?id=c8P9NQVtmnO). First of all we import the modules needed for the tutorial. Importing `scipy` is needed for input-output operations.
 
-# In[ ]:
+# In[1]:
 
 
 ## routine needed to run the notebook on Google Colab
@@ -24,17 +24,19 @@ if IN_COLAB:
   # get the data
   get_ipython().system('wget https://github.com/mathLab/PINA/raw/refs/heads/master/tutorials/tutorial5/Data_Darcy.mat')
 
-  
+import torch
+import matplotlib.pyplot as plt
+import warnings
+
 # !pip install scipy  # install scipy
 from scipy import io
-import torch
 from pina.model import FNO, FeedForward  # let's import some models
 from pina import Condition, LabelTensor
-from pina.solvers import SupervisedSolver
+from pina.solver import SupervisedSolver
 from pina.trainer import Trainer
 from pina.problem import AbstractProblem
-import matplotlib.pyplot as plt
-plt.style.use('tableau-colorblind10')
+
+warnings.filterwarnings('ignore')
 
 
 # ## Data Generation
@@ -74,33 +76,23 @@ y = torch.tensor(data['y'], dtype=torch.float)[0]
 
 plt.subplot(1, 2, 1)
 plt.title('permeability')
-plt.imshow(k_train.squeeze(-1)[0])
+plt.imshow(k_train.squeeze(-1).tensor[0])
 plt.subplot(1, 2, 2)
 plt.title('field solution')
 plt.imshow(u_train.squeeze(-1)[0])
 plt.show()
 
 
+# We now create the neural operator class. It is a very simple class, inheriting from `AbstractProblem`.
+
 # In[4]:
 
 
-u_train.labels[3]['dof']
-
-
-# We now create the neural operator class. It is a very simple class, inheriting from `AbstractProblem`.
-
-# In[ ]:
-
-
 class NeuralOperatorSolver(AbstractProblem):
-    input_variables = k_train.labels[3]['dof']
-    output_variables = u_train.labels[3]['dof']
-    domains = {
-        'pts': k_train
-    }
-    conditions = {'data' : Condition(domain='pts', #not among allowed pairs!!!
-                                     output_points=u_train)}
-
+    input_variables = k_train.full_labels[3]['dof']
+    output_variables = u_train.full_labels[3]['dof']
+    conditions = {'data' : Condition(input=k_train, 
+                                     target=u_train)}
 # make problem
 problem = NeuralOperatorSolver()
 
@@ -109,7 +101,7 @@ problem = NeuralOperatorSolver()
 # 
 # We will first solve the problem using a Feedforward neural network. We will use the `SupervisedSolver` for solving the problem, since we are training using supervised learning.
 
-# In[6]:
+# In[5]:
 
 
 # make model
@@ -120,14 +112,17 @@ model = FeedForward(input_dimensions=1, output_dimensions=1)
 solver = SupervisedSolver(problem=problem, model=model)
 
 # make the trainer and train
-trainer = Trainer(solver=solver, max_epochs=10, accelerator='cpu', enable_model_summary=False, batch_size=10) 
+trainer = Trainer(solver=solver, max_epochs=10, accelerator='cpu', enable_model_summary=False, batch_size=10,
 # We train on CPU and avoid model summary at the beginning of training (optional)
+train_size=1.0,
+val_size=0.0,
+test_size=0.0)
 trainer.train()
 
 
 # The final loss is pretty high... We can calculate the error by importing `LpLoss`.
 
-# In[7]:
+# In[6]:
 
 
 from pina.loss import LpLoss
@@ -135,7 +130,7 @@ from pina.loss import LpLoss
 # make the metric
 metric_err = LpLoss(relative=True)
 
-model = solver.models[0]
+model = solver.model
 err = float(metric_err(u_train.squeeze(-1), model(k_train).squeeze(-1)).mean())*100
 print(f'Final error training {err:.2f}%')
 
@@ -147,7 +142,7 @@ print(f'Final error testing {err:.2f}%')
 # 
 # We will now move to solve the problem using a FNO. Since we are learning operator this approach is better suited, as we shall see.
 
-# In[8]:
+# In[7]:
 
 
 # make model
@@ -165,16 +160,20 @@ model = FNO(lifting_net=lifting_net,
 solver = SupervisedSolver(problem=problem, model=model)
 
 # make the trainer and train
-trainer = Trainer(solver=solver, max_epochs=10, accelerator='cpu', enable_model_summary=False, batch_size=10) # we train on CPU and avoid model summary at beginning of training (optional)
+trainer = Trainer(solver=solver, max_epochs=10, accelerator='cpu', enable_model_summary=False, # We train on CPU and avoid model summary at the beginning of training (optional)
+batch_size=10,
+train_size=1.0,
+val_size=0.0,
+test_size=0.0)
 trainer.train()
 
 
 # We can clearly see that the final loss is lower. Let's see in testing.. Notice that the number of parameters is way higher than a `FeedForward` network. We suggest to use GPU or TPU for a speed up in training, when many data samples are used.
 
-# In[9]:
+# In[8]:
 
 
-model = solver.models[0]
+model = solver.model
 
 err = float(metric_err(u_train.squeeze(-1), model(k_train).squeeze(-1)).mean())*100
 print(f'Final error training {err:.2f}%')
