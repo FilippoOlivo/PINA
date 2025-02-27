@@ -2,8 +2,6 @@
 This module provides an interface to build torch_geometric.data.Data objects.
 """
 
-import warnings
-
 import torch
 
 from . import LabelTensor
@@ -32,9 +30,9 @@ class Graph(Data):
         # check the consistency of types defined in __init__, the others are not
         # checked (as in pyg Data object)
         instance._check_type_consistency(**kwargs)
-        
+
         return instance
-    
+
     def __init__(
         self,
         x=None,
@@ -56,8 +54,9 @@ class Graph(Data):
         self._preprocess_edge_index(edge_index, undirected)
 
         # calling init
-        super().__init__(x=x, edge_index=edge_index, edge_attr=edge_attr,
-                         pos=pos, **kwargs)
+        super().__init__(
+            x=x, edge_index=edge_index, edge_attr=edge_attr, pos=pos, **kwargs
+        )
 
     def _check_type_consistency(self, **kwargs):
         # default types, specified in cls.__new__, by default they are Nont
@@ -85,9 +84,10 @@ class Graph(Data):
         Check if the position tensor is consistent.
         :param torch.Tensor pos: The position tensor.
         """
-        check_consistency(pos, (torch.Tensor, LabelTensor))
-        if pos.ndim != 2:
-            raise ValueError("pos must be a 2D tensor.")
+        if pos is not None:
+            check_consistency(pos, (torch.Tensor, LabelTensor))
+            if pos.ndim != 2:
+                raise ValueError("pos must be a 2D tensor.")
 
     @staticmethod
     def _check_edge_index_consistency(edge_index):
@@ -109,16 +109,17 @@ class Graph(Data):
 
         :param torch.Tensor edge_index: The edge index tensor.
         """
-        check_consistency(edge_attr, (torch.Tensor, LabelTensor))
-        if edge_attr.ndim != 2:
-            raise ValueError("edge_attr must be a 2D tensor.")
-        if edge_attr.size(1) != edge_index.size(0):
-            raise ValueError(
-                "edge_attr must have shape "
-                "[num_edges, num_edge_features], expected "
-                f"num_edges {edge_index.size(0)} "
-                f"got {edge_attr.size(1)}."
-            )
+        if edge_attr is not None:
+            check_consistency(edge_attr, (torch.Tensor, LabelTensor))
+            if edge_attr.ndim != 2:
+                raise ValueError("edge_attr must be a 2D tensor.")
+            if edge_attr.size(0) != edge_index.size(1):
+                raise ValueError(
+                    "edge_attr must have shape "
+                    "[num_edges, num_edge_features], expected "
+                    f"num_edges {edge_index.size(1)} "
+                    f"got {edge_attr.size(0)}."
+                )
 
     @staticmethod
     def _check_x_consistency(x, pos=None):
@@ -131,6 +132,9 @@ class Graph(Data):
             check_consistency(x, (torch.Tensor, LabelTensor))
             if x.ndim != 2:
                 raise ValueError("x must be a 2D tensor.")
+            if pos is not None:
+                if x.size(0) != pos.size(0):
+                    raise ValueError("Inconsistent number of nodes.")
             if pos is not None:
                 if x.size(0) != pos.size(0):
                     raise ValueError("Inconsistent number of nodes.")
@@ -148,73 +152,69 @@ class Graph(Data):
             edge_index = to_undirected(edge_index)
         return edge_index
 
-class RadiusGraph(Graph):
-    def __init__(
-        self,
-        radius,
+
+class GraphBuilder:
+    def __new__(
+        cls,
+        pos,
+        edge_index,
         x=None,
-        pos=None,
-        edge_attr=None,
+        edge_attr=False,
+        custom_edge_func=None,
         undirected=False,
         **kwargs,
     ):
-        super().__init__(x=x, edge_index=None, edge_attr=edge_attr,
-                         pos=pos, undirected=undirected, **kwargs)
-        edge_index = self._radius_graph(pos, radius)
-        self.radius = radius
-        self.edge_index = edge_index
-    
+        edge_attr = cls._create_edge_attr(
+            pos, edge_index, edge_attr, custom_edge_func or cls._build_edge_attr
+        )
+        return Graph(
+            x=x,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            pos=pos,
+            undirected=undirected,
+            **kwargs,
+        )
+
     @staticmethod
-    def _radius_graph(points, r):
-        """
-        Implementation of the radius graph construction.
-        :param points: The input points.
-        :type points: torch.Tensor
-        :param r: The radius.
-        :type r: float
-        :return: The edge index.
-        :rtype: torch.Tensor
-        """
+    def _create_edge_attr(pos, edge_index, edge_attr, func):
+        if edge_attr:
+            if callable(func):
+                return func(pos, edge_index)
+            raise ValueError("custom_edge_func must be a function.")
+        return None
+
+    @staticmethod
+    def _build_edge_attr(pos, edge_index):
+        return (
+            (pos[edge_index[0]] - pos[edge_index[1]])
+            .abs()
+            .as_subclass(torch.Tensor)
+        )
+
+
+class RadiusGraph(GraphBuilder):
+    def __new__(cls, pos, radius, **kwargs):
+        edge_index = cls._compute_radius_graph(pos, radius).as_subclass(
+            torch.Tensor
+        )
+        return super().__new__(cls, pos=pos, edge_index=edge_index, **kwargs)
+
+    @staticmethod
+    def _compute_radius_graph(points, r):
         dist = torch.cdist(points, points, p=2)
-        edge_index = torch.nonzero(dist <= r, as_tuple=False).t()
-        if isinstance(edge_index, LabelTensor):
-            edge_index = edge_index.tensor
-        return edge_index
-    
-class KNNGraph(Graph):
-    def __init__(
-        self,
-        neighboors,
-        x=None,
-        pos=None,
-        edge_attr=None,
-        undirected=False,
-        **kwargs,
-    ):
-        super().__init__(x=x, edge_index=None, edge_attr=edge_attr,
-                         pos=pos, undirected=undirected, **kwargs)
-        edge_index = self._knn_graph(pos, neighboors)
-        self.neighboors = neighboors
-        self.edge_index = edge_index
-    
+        return torch.nonzero(dist <= r, as_tuple=False).t()
+
+
+class KNNGraph(GraphBuilder):
+    def __new__(cls, pos, neighbours, **kwargs):
+        edge_index = cls._compute_knn_graph(pos, neighbours)
+        return super().__new__(cls, pos=pos, edge_index=edge_index, **kwargs)
+
     @staticmethod
-    def _knn_graph(points, k):
-        """
-        Implementation of the k-nearest neighbors graph construction.
-        :param points: The input points.
-        :type points: torch.Tensor
-        :param k: The number of nearest neighbors.
-        :type k: int
-        :return: The edge index.
-        :rtype: torch.Tensor
-        """
-        if isinstance(points, LabelTensor):
-            points = points.tensor
+    def _compute_knn_graph(points, k):
         dist = torch.cdist(points, points, p=2)
         knn_indices = torch.topk(dist, k=k + 1, largest=False).indices[:, 1:]
         row = torch.arange(points.size(0)).repeat_interleave(k)
         col = knn_indices.flatten()
-        edge_index = torch.stack([row, col], dim=0)
-        if isinstance(edge_index, LabelTensor):
-            edge_index = edge_index.tensor
-        return edge_index
+        return torch.stack([row, col], dim=0).as_subclass(torch.Tensor)
