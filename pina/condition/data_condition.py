@@ -11,10 +11,9 @@ from ..graph import Graph
 
 class DataCondition(ConditionInterface):
     """
-    Condition for data. This condition must be used every
-    time a Unsupervised Loss is needed in the Solver. The conditionalvariable
-    can be passed as extra-input when the model learns a conditional
-    distribution
+    This condition must be used every time a Unsupervised Loss is needed in
+    the Solver. The conditionalvariable can be passed as extra-input when
+    the model learns a conditional distribution.
     """
 
     __slots__ = ["input", "conditional_variables"]
@@ -23,17 +22,24 @@ class DataCondition(ConditionInterface):
 
     def __new__(cls, input, conditional_variables=None):
         """
-        Instanciate the correct subclass of DataCondition by checking the type
-        of the input data (input and conditional_variables).
+        Instantiate the appropriate subclass of DataCondition based on the
+        types of input data.
 
-        :param input: torch.Tensor or Graph/Data object containing the input
-            data
-        :type input: torch.Tensor or Graph or Data
-        :param conditional_variables: torch.Tensor or LabelTensor containing
-            the conditional variables
-        :type conditional_variables: torch.Tensor or LabelTensor
-        :return: DataCondition subclass
-        :rtype: TensorDataCondition or GraphDataCondition
+        :param input: Input data for the condition.
+        :type input: torch.Tensor | LabelTensor | Graph |
+            torch_geometric.data.Data | list[Graph] |
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+        :param conditional_variables: Conditional variables for the condition.
+        :type conditional_variables: torch.Tensor | LabelTensor
+        :return: Subclass of DataCondition.
+        :rtype: TensorDataCondition | GraphDataCondition
+
+        :raises ValueError: If input is not of type :class:`torch.Tensor`,
+            :class:`LabelTensor`, :class:`Graph`, or
+            :class:`torch_geometric.data.Data`.
+
+
         """
         if cls != DataCondition:
             return super().__new__(cls)
@@ -48,7 +54,7 @@ class DataCondition(ConditionInterface):
 
         raise ValueError(
             "Invalid input types. "
-            "Please provide either Data or Graph objects."
+            "Please provide either torch_geometric.data.Data or Graph objects."
         )
 
     def __init__(self, input, conditional_variables=None):
@@ -56,12 +62,18 @@ class DataCondition(ConditionInterface):
         Initialize the DataCondition, storing the input and conditional
         variables (if any).
 
-        :param input: torch.Tensor or Graph/Data object containing the input
-            data
-        :type input: torch.Tensor or Graph or Data
-        :param conditional_variables: torch.Tensor or LabelTensor containing
-            the conditional variables
+        :param input: Input data for the condition.
+        :type input: torch.Tensor | LabelTensor | Graph |
+            torch_geometric.data.Data | list[Graph] |
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+        :param conditional_variables: Conditional variables for the condition.
         :type conditional_variables: torch.Tensor or LabelTensor
+
+        .. note::
+            If either `input` is composed by a list of :class:`Graph`/
+            :class:`torch_geometric.data.Data` objects, all elements must have
+            the same structure (keys and data types)
         """
         super().__init__()
         self.input = input

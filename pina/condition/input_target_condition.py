@@ -21,17 +21,28 @@ class InputTargetCondition(ConditionInterface):
 
     def __new__(cls, input, target):
         """
-        Instanciate the correct subclass of InputTargetCondition by checking the
-        type of the input and target data.
+        Instantiate the appropriate subclass of InputTargetCondition based on
+        the types of input and target data.
 
-        :param input: torch.Tensor or Graph/Data object containing the input
-        :type input: torch.Tensor or Graph or Data
-        :param target: torch.Tensor or Graph/Data object containing the target
-        :type target: torch.Tensor or Graph or Data
-        :return: InputTargetCondition subclass
-        :rtype: TensorInputTensorTargetCondition or
-            TensorInputGraphTargetCondition or GraphInputTensorTargetCondition
-            or GraphInputGraphTargetCondition
+        :param input: Input data for the condition.
+        :type input: torch.Tensor | LabelTensor | Graph | 
+            torch_geometric.data.Data | list[Graph] | 
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+        :param target: Target data for the condition.
+        :type target: torch.Tensor | LabelTensor | Graph | 
+            torch_geometric.data.Data | list[Graph] | 
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+        :return: Subclass of InputTargetCondition
+        :rtype: TensorInputTensorTargetCondition | \
+            TensorInputGraphTargetCondition | \
+            GraphInputTensorTargetCondition | \
+            GraphInputGraphTargetCondition
+
+        :raises ValueError: If input and or target are not of type
+            :class:`torch.Tensor`, :class:`LabelTensor`, :class:`Graph`, or
+            :class:`torch_geometric.data.Data`.
         """
         if cls != InputTargetCondition:
             return super().__new__(cls)
@@ -65,19 +76,31 @@ class InputTargetCondition(ConditionInterface):
 
         raise ValueError(
             "Invalid input/target types. "
-            "Please provide either Data, Graph, LabelTensor or torch.Tensor "
-            "objects."
+            "Please provide either torch_geometric.data.Data, Graph, "
+            "LabelTensor or torch.Tensor objects."
         )
 
     def __init__(self, input, target):
         """
         Initialize the InputTargetCondition, storing the input and target data.
 
-        :param input: torch.Tensor or Graph/Data object containing the input
-        :type input: torch.Tensor or Graph or Data
-        :param target: torch.Tensor or Graph/Data object containing the target
-        :type target: torch.Tensor or Graph or Data
+        :param input: Input data for the condition.
+        :type input: torch.Tensor | LabelTensor | Graph |
+            torch_geometric.data.Data | list[Graph] |
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+        :param target: Target data for the condition.
+        :type target: torch.Tensor | LabelTensor | Graph |
+            torch_geometric.data.Data | list[Graph] |
+            list[torch_geometric.data.Data] | tuple[Graph] |
+            tuple[torch_geometric.data.Data]
+
+        .. note::
+            If either ``input`` or ``target`` are composed by a list of
+            :class:`Graph`/:class:`torch_geometric.data.Data` objects, all
+            elements must have the same structure (keys and data types)
         """
+
         super().__init__()
         self._check_input_target_len(input, target)
         self.input = input
@@ -97,25 +120,28 @@ class InputTargetCondition(ConditionInterface):
 
 class TensorInputTensorTargetCondition(InputTargetCondition):
     """
-    InputTargetCondition subclass for torch.Tensor input and target data.
+    InputTargetCondition subclass for :class:`torch.Tensor`/:class:`LabelTensor`
+    input and target data.
     """
 
 
 class TensorInputGraphTargetCondition(InputTargetCondition):
     """
-    InputTargetCondition subclass for torch.Tensor input and Graph/Data target
-    data.
+    InputTargetCondition subclass for :class:`torch.Tensor`/:class:`LabelTensor`
+    input and :class:`Graph`/:class:`torch_geometric.data.Data` target data.
     """
 
 
 class GraphInputTensorTargetCondition(InputTargetCondition):
     """
-    InputTargetCondition subclass for Graph/Data input and torch.Tensor target
-    data.
+    InputTargetCondition subclass for :class:`Graph`/
+    :class:`torch_geometric.data.Data` input and :class:`torch.Tensor`/
+    :class:`LabelTensor` target data.
     """
 
 
 class GraphInputGraphTargetCondition(InputTargetCondition):
     """
-    InputTargetCondition subclass for Graph/Data input and target data.
+    InputTargetCondition subclass for :class:`Graph`/
+    :class:`torch_geometric.data.Data` input and target data.
     """
