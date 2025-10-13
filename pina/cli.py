@@ -6,6 +6,7 @@ import yaml
 from pina.problem import AbstractProblem
 from pina.solver import SolverInterface
 from pina.trainer import Trainer
+from pina.problem.zoo import Poisson2DSquareProblem
 
 
 def import_class(class_path: str):
@@ -37,16 +38,19 @@ class PINACLI:
             fail_untyped=False,
             instantiate=False,
         )
-        self.parser.add_function_arguments(
-            AbstractProblem.discretise_domain,
-            nested_key="discretise_domain",
+
+        self.parser.add_method_arguments(
+            AbstractProblem,
+            "discretise_domain",
+            "discretise_domain",
             fail_untyped=False,
         )
+
         self.parser.add_subclass_arguments(
             baseclass=SolverInterface,
             nested_key="solver",
             fail_untyped=False,
-            instantiate=True,
+            instantiate=False,
         )
 
         self.parser.add_subclass_arguments(
@@ -71,6 +75,7 @@ class PINACLI:
         """Parse CLI args and config, dynamically instantiate required sections."""
         # parse everything; unknown keys are kept as dicts
         self.config = vars(self.parser.parse_args())
+        
         self.stage = self.config["stage"]
         self._instantiate_problem()
         self._discretise_problem_domain()
