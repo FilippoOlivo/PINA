@@ -96,7 +96,7 @@ class PINACLI:
             return [self._instantiate_nested_classes(item) for item in config]
         return config
 
-    def _instantiate_class(self, config):
+    def _instantiate_class(self, config, checkpoint_path: str = None):
         if "init_args" in config:
             config["init_args"] = self._instantiate_nested_classes(
                 config["init_args"]
@@ -105,6 +105,8 @@ class PINACLI:
         class_path = config["class_path"]
         init_args = config.get("init_args", {})
         class_ = import_class(class_path)
+        if checkpoint_path and hasattr(class_, "load_from_checkpoint"):
+            return class_.load_from_checkpoint(checkpoint_path, **init_args)
         return class_(**init_args)
 
     def _instantiate_problem(self):
@@ -130,3 +132,12 @@ class PINACLI:
         solver_cfg = self.config["trainer"].as_dict()
         solver_cfg["init_args"]["solver"] = self.solver
         self.solver = self._instantiate_class(solver_cfg)
+
+    def load_checkpoint(self, checkpoint_path: str):
+        """Load model and trainer state from a checkpoint file."""
+        logging_dir = self.trainer.logger.log_dir
+        solver_cfg = self.config["solver"].as_dict()
+        print(solver_cfg)
+        solver_cfg["init_args"]["problem"] = self.problem
+        self.solver = self._instantiate_class(solver_cfg, checkpoint_path=logging_dir)
+        
