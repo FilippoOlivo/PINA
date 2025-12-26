@@ -6,10 +6,10 @@ import torch
 from torch_geometric.data import Data
 from ..label_tensor import LabelTensor
 from ..graph import Graph
-from .condition_interface import ConditionInterface
+from .condition_base import ConditionBase, GraphCondition, TensorCondition
 
 
-class InputTargetCondition(ConditionInterface):
+class InputTargetCondition(ConditionBase):
     """
     The :class:`InputTargetCondition` class represents a supervised condition
     defined by both ``input`` and ``target`` data. The model is trained to
@@ -55,7 +55,7 @@ class InputTargetCondition(ConditionInterface):
     """
 
     # Available input and target data types
-    __slots__ = ["input", "target"]
+    __fields__ = ["input", "target"]
     _avail_input_cls = (torch.Tensor, LabelTensor, Data, Graph, list, tuple)
     _avail_output_cls = (torch.Tensor, LabelTensor, Data, Graph, list, tuple)
 
@@ -109,80 +109,42 @@ class InputTargetCondition(ConditionInterface):
             subclass = GraphInputTensorTargetCondition
             return subclass.__new__(subclass, input, target)
 
-        # Graph - Graph
-        if isinstance(input, (Graph, Data, list, tuple)) and isinstance(
-            target, (Graph, Data, list, tuple)
-        ):
-            cls._check_graph_list_consistency(input)
-            cls._check_graph_list_consistency(target)
-            subclass = GraphInputGraphTargetCondition
-            return subclass.__new__(subclass, input, target)
-
-        # If the input and/or target are not of the correct type raise an error
         raise ValueError(
             "Invalid input | target types."
             "Please provide either torch_geometric.data.Data, Graph, "
             "LabelTensor or torch.Tensor objects."
         )
 
-    def __init__(self, input, target):
-        """
-        Initialization of the :class:`InputTargetCondition` class.
 
-        :param input: The input data for the condition.
-        :type input: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :param target: The target data for the condition.
-        :type target: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-
-        .. note::
-
-            If either ``input`` or ``target`` is a list of
-            :class:`~pina.graph.Graph` or :class:`~torch_geometric.data.Data`
-            objects, all elements in the list must share the same structure,
-            with matching keys and consistent data types.
-        """
-        super().__init__()
-        self._check_input_target_len(input, target)
-        self.input = input
-        self.target = target
-
-    @staticmethod
-    def _check_input_target_len(input, target):
-        """
-        Check that the length of the input and target lists are the same.
-
-        :param input: The input data.
-        :type input: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :param target: The target data.
-        :type target: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :raises ValueError: If the lengths of the input and target lists do not
-            match.
-        """
-        if isinstance(input, (Graph, Data)) or isinstance(
-            target, (Graph, Data)
-        ):
-            return
-
-        # Raise an error if the lengths of the input and target do not match
-        if len(input) != len(target):
-            raise ValueError(
-                "The input and target lists must have the same length."
-            )
-
-
-class TensorInputTensorTargetCondition(InputTargetCondition):
+class TensorInputTensorTargetCondition(InputTargetCondition, TensorCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     both ``input`` and ``target`` are :class:`torch.Tensor` or
     :class:`~pina.label_tensor.LabelTensor` objects.
     """
 
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
 
-class TensorInputGraphTargetCondition(InputTargetCondition):
+        :return: The input data.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return self.data["input"]
+
+    @property
+    def target(self):
+        """
+        Return the target data for the condition.
+
+        :return: The target data.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return self.data["target"]
+
+
+class TensorInputGraphTargetCondition(GraphCondition, InputTargetCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     ``input`` is either a :class:`torch.Tensor` or a
@@ -190,8 +152,47 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
     :class:`~pina.graph.Graph` or a :class:`torch_geometric.data.Data` object.
     """
 
+    def __init__(self, input, target):
+        """
+        Initialization of the :class:`TensorInputGraphTargetCondition` class.
 
-class GraphInputTensorTargetCondition(InputTargetCondition):
+        :param input: The input data for the condition.
+        :type input: torch.Tensor | LabelTensor
+        :param target: The target data for the condition.
+        :type target: Graph | Data | list[Graph] | list[Data] |
+            tuple[Graph] | tuple[Data]
+        """
+        self.graph_field = "target"
+        self.tensor_fields = ["input"]
+        self.keys_map = {"input": "x"}
+        super().__init__(input=input, target=target)
+
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
+
+        :return: The input data.
+        :rtype: list[torch.Tensor] | list[LabelTensor]
+        """
+        targets = []
+        is_lt = isinstance(self.data["data"][0].x, LabelTensor)
+        for graph in self.data["data"]:
+            targets.append(graph.x)
+        return torch.stack(targets) if not is_lt else LabelTensor.stack(targets)
+
+    @property
+    def target(self):
+        """
+        Return the target data for the condition.
+
+        :return: The target data.
+        :rtype: list[Graph] | list[Data]
+        """
+        return self.data["data"]
+
+
+class GraphInputTensorTargetCondition(GraphCondition, InputTargetCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     ``input`` is either a :class:`~pina.graph.Graph` or
@@ -199,10 +200,42 @@ class GraphInputTensorTargetCondition(InputTargetCondition):
     :class:`torch.Tensor` or a :class:`~pina.label_tensor.LabelTensor` object.
     """
 
+    def __init__(self, input, target):
+        """
+        Initialization of the :class:`GraphInputTensorTargetCondition` class.
 
-class GraphInputGraphTargetCondition(InputTargetCondition):
-    """
-    Specialization of the :class:`InputTargetCondition` class for the case where
-    both ``input`` and ``target`` are either :class:`~pina.graph.Graph` or
-    :class:`torch_geometric.data.Data` objects.
-    """
+        :param input: The input data for the condition.
+        :type input: Graph | Data | list[Graph] | list[Data] |
+            tuple[Graph] | tuple[Data]
+        :param target: The target data for the condition.
+        :type target: torch.Tensor | LabelTensor
+        """
+        self.graph_field = "input"
+        self.tensor_fields = ["target"]
+        self.keys_map = {"target": "y"}
+        super().__init__(input=input, target=target)
+
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
+
+        :return: The input data.
+        :rtype: list[Graph] | list[Data]
+        """
+        return self.data["data"]
+
+    @property
+    def target(self):
+        """
+        Return the target data for the condition.
+
+        :return: The target data.
+        :rtype: list[torch.Tensor] | list[LabelTensor]
+        """
+        targets = []
+        is_lt = isinstance(self.data["data"][0].y, LabelTensor)
+        for graph in self.data["data"]:
+            targets.append(graph.y)
+
+        return torch.stack(targets) if not is_lt else LabelTensor.stack(targets)
