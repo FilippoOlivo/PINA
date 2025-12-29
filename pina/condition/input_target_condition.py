@@ -3,12 +3,10 @@ This module contains condition classes for supervised learning tasks.
 """
 
 import torch
-from copy import deepcopy
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 from ..label_tensor import LabelTensor
 from ..graph import Graph, LabelBatch
 from .condition_base import ConditionBase
-from torch_geometric.data import Batch
 
 
 class InputTargetCondition(ConditionBase):
@@ -218,6 +216,13 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         )
 
     def _store_data(self, **kwargs):
+        """
+        Store the input and target data for the condition.
+
+        :param kwargs: Keyword arguments containing 'input' and 'target'.
+        :return: Stored data dictionary.
+        :rtype: dict
+        """
         return self._store_graph_data(
             kwargs["target"], kwargs["input"], key="x"
         )
@@ -252,6 +257,13 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         return {"data": self.data["data"][idx]}
 
     def get_multiple_data(self, indices):
+        """
+        Get multiple data items based on the provided indices.
+
+        :param List[int] indices: List of indices to retrieve.
+        :return: Dictionary containing 'input' and 'target' data.
+        :rtype: dict
+        """
         data = self.batch_fn([self.data["data"][i] for i in indices])
         x = data.x
         del data.x  # Avoid duplication of y on GPU memory
@@ -266,14 +278,14 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         Collate function to be used in DataLoader.
 
         :param batch: A list of items from the dataset.
-        :type batch: list
+        :type batch: List[dict]
         :return: A collated batch.
         :rtype: dict
         """
         collated_graphs = super().automatic_batching_collate_fn(batch)
         x = collated_graphs["data"].x
         del collated_graphs["data"].x  # Avoid duplication of y on GPU memory
-        to_return = {"input": x, "input": collated_graphs["data"]}
+        to_return = {"input": x, "target": collated_graphs["data"]}
         return to_return
 
 
@@ -338,6 +350,13 @@ class GraphInputTensorTargetCondition(InputTargetCondition):
         return {"data": self.data["data"][idx]}
 
     def get_multiple_data(self, indices):
+        """
+        Get multiple data items based on the provided indices.
+
+        :param List[int] indices: List of indices to retrieve.
+        :return: Dictionary containing 'input' and 'target' data.
+        :rtype: dict
+        """
         data = self.batch_fn([self.data["data"][i] for i in indices])
         y = data.y
         del data.y  # Avoid duplication of y on GPU memory

@@ -1,9 +1,6 @@
 """Module for the Condition interface."""
 
 from abc import ABCMeta, abstractmethod
-from torch_geometric.data import Data
-from ..label_tensor import LabelTensor
-from ..graph import Graph
 
 
 class ConditionInterface(metaclass=ABCMeta):
@@ -39,4 +36,22 @@ class ConditionInterface(metaclass=ABCMeta):
 
         :param pina.problem.abstract_problem.AbstractProblem value: The problem
             to associate with this condition
+        """
+
+    @abstractmethod
+    def __len__(self):
+        """
+        Return the number of data points in the condition.
+
+        :return: Number of data points.
+        :rtype: int
+        """
+
+    @abstractmethod
+    def __getitem__(self, idx):
+        """
+        Return the data point(s) at the specified index.
+
+        :param int idx: Index of the data point(s) to retrieve.
+        :return: Data point(s) at the specified index.
         """

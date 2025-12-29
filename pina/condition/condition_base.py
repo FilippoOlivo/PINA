@@ -1,15 +1,25 @@
-import torch
+"""
+Base class for conditions.
+"""
+
 from copy import deepcopy
+from functools import partial
+import torch
+from torch_geometric.data import Data, Batch
+from torch.utils.data import DataLoader
 from .condition_interface import ConditionInterface
 from ..graph import Graph, LabelBatch
 from ..label_tensor import LabelTensor
 from ..data.dummy_dataloader import DummyDataloader
-from torch_geometric.data import Data, Batch
-from torch.utils.data import DataLoader
-from functools import partial
 
 
 class ConditionBase(ConditionInterface):
+    """
+    Base abstract class for all conditions in PINA.
+    This class provides common functionality for handling data storage,
+    batching, and interaction with the associated problem.
+    """
+
     collate_fn_dict = {
         "tensor": torch.stack,
         "label_tensor": LabelTensor.stack,
@@ -18,15 +28,32 @@ class ConditionBase(ConditionInterface):
     }
 
     def __init__(self, **kwargs):
+        """
+        Initialization of the :class:`ConditionBase` class.
+
+        :param kwargs: Keyword arguments representing the data to be stored.
+        """
         super().__init__()
         self.data = self._store_data(**kwargs)
 
     @property
     def problem(self):
+        """
+        Return the problem associated with this condition.
+
+        :return: Problem associated with this condition.
+        :rtype: ~pina.problem.abstract_problem.AbstractProblem
+        """
         return self._problem
 
     @problem.setter
     def problem(self, value):
+        """
+        Set the problem associated with this condition.
+
+        :param pina.problem.abstract_problem.AbstractProblem value: The problem
+            to associate with this condition
+        """
         self._problem = value
 
     @staticmethod
@@ -141,7 +168,7 @@ class ConditionBase(ConditionInterface):
         return len(next(iter(self.data.values())))
 
     def __getitem__(self, idx):
-        return {key: self.data[key][idx] for key in self.data}
+        return {name: data[idx] for name, data in self.data.items()}
 
     @classmethod
     def automatic_batching_collate_fn(cls, batch):
