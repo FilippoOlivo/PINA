@@ -200,6 +200,23 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
     :class:`~pina.graph.Graph` or a :class:`torch_geometric.data.Data` object.
     """
 
+    def __init__(self, input, target):
+        """
+        Initialization of the :class:`TensorInputGraphTargetCondition` class.
+
+        :param input: The input data for the condition.
+        :type input: torch.Tensor | LabelTensor
+        :param target: The target data for the condition.
+        :type target: Graph | Data | list[Graph] | list[Data] |
+            tuple[Graph] | tuple[Data]
+        """
+        super().__init__(input=input, target=target)
+        self.batch_fn = (
+            LabelBatch.from_data_list
+            if isinstance(target[0], Graph)
+            else Batch.from_data_list
+        )
+
     def _store_data(self, **kwargs):
         return self._store_graph_data(
             kwargs["target"], kwargs["input"], key="x"
