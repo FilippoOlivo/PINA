@@ -292,3 +292,6 @@ def test_getitems_tensor_input_graph_target_condition(use_lt):
             "u",
             "v",
         ], "TensorInputGraphTargetCondition __getitems__ target labels failed"
+
+
+test_init_graph_input_tensor_target_condition(use_lt=True)

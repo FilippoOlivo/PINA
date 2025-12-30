@@ -42,7 +42,9 @@ def test_init_graph_equation_condition():
     graph, equation = _create_graph_and_equation()
     condition = Condition(input=graph, equation=equation)
     assert isinstance(condition, InputGraphEquationCondition)
-    assert condition.input is graph
+    assert isinstance(condition.input, list)
+    assert len(condition.input) == 1
+    assert condition.input[0].x.shape == (100, 2)
     assert condition.equation is equation
 
 
