@@ -1,13 +1,13 @@
 """Module for the DataCondition class."""
 
 import torch
-from torch_geometric.data import Data
-from .condition_interface import ConditionInterface
+from torch_geometric.data import Data, Batch
+from .condition_base import ConditionBase, GraphCondition, TensorCondition
 from ..label_tensor import LabelTensor
-from ..graph import Graph
+from ..graph import Graph, LabelBatch
 
 
-class DataCondition(ConditionInterface):
+class DataCondition(ConditionBase):
     """
     The class :class:`DataCondition` defines an unsupervised condition based on
     ``input`` data. This condition is typically used in data-driven problems,
@@ -38,7 +38,7 @@ class DataCondition(ConditionInterface):
     """
 
     # Available input data types
-    __slots__ = ["input", "conditional_variables"]
+    __fields__ = ["input", "conditional_variables"]
     _avail_input_cls = (torch.Tensor, LabelTensor, Data, Graph, list, tuple)
     _avail_conditional_variables_cls = (torch.Tensor, LabelTensor)
 
@@ -99,22 +99,115 @@ class DataCondition(ConditionInterface):
             the list must share the same structure, with matching keys and
             consistent data types.
         """
-        super().__init__()
-        self.input = input
-        self.conditional_variables = conditional_variables
+        if conditional_variables is None:
+            super().__init__(input=input)
+        else:
+            super().__init__(
+                input=input, conditional_variables=conditional_variables
+            )
+
+    @property
+    def conditional_variables(self):
+        """
+        Return the conditional variables for the condition.
+
+        :return: The conditional variables.
+        :rtype: torch.Tensor | LabelTensor | None
+        """
+        return self.data.get("conditional_variables", None)
 
 
-class TensorDataCondition(DataCondition):
+class TensorDataCondition(TensorCondition, DataCondition):
     """
     Specialization of the :class:`DataCondition` class for the case where
     ``input`` is either a :class:`~pina.label_tensor.LabelTensor` object or a
     :class:`torch.Tensor` object.
     """
 
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
 
-class GraphDataCondition(DataCondition):
+        :return: The input data.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return self.data["input"]
+
+
+class GraphDataCondition(GraphCondition, DataCondition):
     """
     Specialization of the :class:`DataCondition` class for the case where
     ``input`` is either a :class:`~pina.graph.Graph` object or a
     :class:`~torch_geometric.data.Data` object.
     """
+
+    def __init__(self, input, conditional_variables=None):
+        """
+        Initialization of the :class:`GraphDataCondition` class.
+
+        :param input: The input data for the condition.
+        :type input: Graph | Data | list[Graph] | list[Data] |
+            tuple[Graph] | tuple[Data]
+        :param conditional_variables: The conditional variables for the
+            condition. Default is ``None``.
+        :type conditional_variables: torch.Tensor | LabelTensor
+
+        .. note::
+
+            If ``input`` is a list of :class:`~pina.graph.Graph` or
+            :class:`~torch_geometric.data.Data`, all elements in
+            the list must share the same structure, with matching keys and
+            consistent data types.
+        """
+        self.graph_field = "input"
+        self.tensor_fields = []
+        self.keys_map = {}
+        if conditional_variables is not None:
+            self.tensor_fields.append("conditional_variables")
+            self.keys_map["conditional_variables"] = "cond_vars"
+        super().__init__(
+            input=input, conditional_variables=conditional_variables
+        )
+
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
+
+        :return: The input data.
+        :rtype: Graph | Data | list[Graph] | list[Data] | tuple[Graph] |
+            tuple[Data]
+        """
+        return self.data["data"]
+
+    @property
+    def conditional_variables(self):
+        """
+        Return the target data for the condition.
+
+        :return: The target data.
+        :rtype: list[torch.Tensor] | list[LabelTensor]
+        """
+
+        if not hasattr(self.data["data"][0], "cond_vars"):
+            return None
+        cond_vars = []
+        is_lt = isinstance(self.data["data"][0].cond_vars, LabelTensor)
+        for graph in self.data["data"]:
+            cond_vars.append(graph.cond_vars)
+        return (
+            torch.stack(cond_vars)
+            if not is_lt
+            else LabelTensor.stack(cond_vars)
+        )
+
+    def __getitem__(self, idx):
+        """
+        Get item by index from the input data.
+
+        :param int index: The index of the item to retrieve.
+        :return: The item at the specified index.
+        :rtype: Graph | Data
+        """
+        input_ = self.batch_fn(self.data["input"][idx])

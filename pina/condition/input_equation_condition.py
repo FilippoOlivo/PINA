@@ -1,6 +1,6 @@
 """Module for the InputEquationCondition class and its subclasses."""
 
-from .condition_base import ConditionBase
+from .condition_base import ConditionBase, TensorCondition, GraphCondition
 from ..label_tensor import LabelTensor
 from ..graph import Graph
 from ..equation.equation_interface import EquationInterface
@@ -99,6 +99,13 @@ class InputEquationCondition(ConditionBase):
         super().__init__(input=input)
         self.equation = equation
 
+
+class InputTensorEquationCondition(TensorCondition, InputEquationCondition):
+    """
+    Specialization of the :class:`InputEquationCondition` class for the case
+    where ``input`` is a :class:`~pina.label_tensor.LabelTensor` object.
+    """
+
     @property
     def input(self):
         """
@@ -110,18 +117,31 @@ class InputEquationCondition(ConditionBase):
         return self.data["input"]
 
 
-class InputTensorEquationCondition(InputEquationCondition):
-    """
-    Specialization of the :class:`InputEquationCondition` class for the case
-    where ``input`` is a :class:`~pina.label_tensor.LabelTensor` object.
-    """
-
-
-class InputGraphEquationCondition(InputEquationCondition):
+class InputGraphEquationCondition(GraphCondition, InputEquationCondition):
     """
     Specialization of the :class:`InputEquationCondition` class for the case
     where ``input`` is a :class:`~pina.graph.Graph` object.
     """
+
+    def __init__(self, input, equation):
+        """
+        Initialization of the :class:`InputGraphEquationCondition` class.
+
+        :param input: The input data for the condition.
+        :type input: Graph | list[Graph] | tuple[Graph]
+        :param EquationInterface equation: The equation to be satisfied over the
+            specified input points.
+
+        .. note::
+
+            If ``input`` is a list of :class:`~pina.graph.Graph` all elements in
+            the list must share the same structure, with matching keys and
+            consistent data types.
+        """
+        self.graph_field = "input"
+        self.tensor_fields = []
+        self.keys_map = {}
+        super().__init__(input=[input], equation=equation)
 
     @staticmethod
     def _check_label_tensor(input):
@@ -145,3 +165,13 @@ class InputGraphEquationCondition(InputEquationCondition):
                 return
 
         raise ValueError("The input must contain at least one LabelTensor.")
+
+    @property
+    def input(self):
+        """
+        Return the input data for the condition.
+
+        :return: The input data.
+        :rtype: list[Graph] | list[Data]
+        """
+        return self.data["data"]

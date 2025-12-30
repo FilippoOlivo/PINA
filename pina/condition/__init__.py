@@ -8,7 +8,7 @@ __all__ = [
     "TensorInputTensorTargetCondition",
     "TensorInputGraphTargetCondition",
     "GraphInputTensorTargetCondition",
-    "GraphInputGraphTargetCondition",
+    # "GraphInputGraphTargetCondition",
     "InputEquationCondition",
     "InputTensorEquationCondition",
     "InputGraphEquationCondition",
@@ -25,7 +25,7 @@ from .input_target_condition import (
     TensorInputTensorTargetCondition,
     TensorInputGraphTargetCondition,
     GraphInputTensorTargetCondition,
-    GraphInputGraphTargetCondition,
+    # GraphInputGraphTargetCondition,
 )
 from .input_equation_condition import (
     InputEquationCondition,

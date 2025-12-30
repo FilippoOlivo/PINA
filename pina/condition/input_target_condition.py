@@ -3,10 +3,10 @@ This module contains condition classes for supervised learning tasks.
 """
 
 import torch
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Data
 from ..label_tensor import LabelTensor
-from ..graph import Graph, LabelBatch
-from .condition_base import ConditionBase
+from ..graph import Graph
+from .condition_base import ConditionBase, GraphCondition, TensorCondition
 
 
 class InputTargetCondition(ConditionBase):
@@ -115,7 +115,7 @@ class InputTargetCondition(ConditionBase):
             "LabelTensor or torch.Tensor objects."
         )
 
-    def __init__(self, input, target):
+    def __init__(self, **kwargs):
         """
         Initialization of the :class:`InputTargetCondition` class.
 
@@ -133,36 +133,10 @@ class InputTargetCondition(ConditionBase):
             objects, all elements in the list must share the same structure,
             with matching keys and consistent data types.
         """
-        self._check_input_target_len(input, target)
-        super().__init__(input=input, target=target)
-
-    @staticmethod
-    def _check_input_target_len(input, target):
-        """
-        Check that the length of the input and target lists are the same.
-
-        :param input: The input data.
-        :type input: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :param target: The target data.
-        :type target: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :raises ValueError: If the lengths of the input and target lists do not
-            match.
-        """
-        if isinstance(input, (Graph, Data)) or isinstance(
-            target, (Graph, Data)
-        ):
-            return
-
-        # Raise an error if the lengths of the input and target do not match
-        if len(input) != len(target):
-            raise ValueError(
-                "The input and target lists must have the same length."
-            )
+        super().__init__(**kwargs)
 
 
-class TensorInputTensorTargetCondition(InputTargetCondition):
+class TensorInputTensorTargetCondition(InputTargetCondition, TensorCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     both ``input`` and ``target`` are :class:`torch.Tensor` or
@@ -190,7 +164,7 @@ class TensorInputTensorTargetCondition(InputTargetCondition):
         return self.data["target"]
 
 
-class TensorInputGraphTargetCondition(InputTargetCondition):
+class TensorInputGraphTargetCondition(GraphCondition, InputTargetCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     ``input`` is either a :class:`torch.Tensor` or a
@@ -208,24 +182,10 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         :type target: Graph | Data | list[Graph] | list[Data] |
             tuple[Graph] | tuple[Data]
         """
+        self.graph_field = "target"
+        self.tensor_fields = ["input"]
+        self.keys_map = {"input": "x"}
         super().__init__(input=input, target=target)
-        self.batch_fn = (
-            LabelBatch.from_data_list
-            if isinstance(target[0], Graph)
-            else Batch.from_data_list
-        )
-
-    def _store_data(self, **kwargs):
-        """
-        Store the input and target data for the condition.
-
-        :param kwargs: Keyword arguments containing 'input' and 'target'.
-        :return: Stored data dictionary.
-        :rtype: dict
-        """
-        return self._store_graph_data(
-            kwargs["target"], kwargs["input"], key="x"
-        )
 
     @property
     def input(self):
@@ -251,27 +211,6 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         """
         return self.data["data"]
 
-    def __getitem__(self, idx):
-        if isinstance(idx, list):
-            return self.get_multiple_data(idx)
-        return {"data": self.data["data"][idx]}
-
-    def get_multiple_data(self, indices):
-        """
-        Get multiple data items based on the provided indices.
-
-        :param List[int] indices: List of indices to retrieve.
-        :return: Dictionary containing 'input' and 'target' data.
-        :rtype: dict
-        """
-        data = self.batch_fn([self.data["data"][i] for i in indices])
-        x = data.x
-        del data.x  # Avoid duplication of y on GPU memory
-        return {
-            "input": x,
-            "target": data,
-        }
-
     @classmethod
     def automatic_batching_collate_fn(cls, batch):
         """
@@ -289,7 +228,7 @@ class TensorInputGraphTargetCondition(InputTargetCondition):
         return to_return
 
 
-class GraphInputTensorTargetCondition(InputTargetCondition):
+class GraphInputTensorTargetCondition(GraphCondition, InputTargetCondition):
     """
     Specialization of the :class:`InputTargetCondition` class for the case where
     ``input`` is either a :class:`~pina.graph.Graph` or
@@ -307,17 +246,10 @@ class GraphInputTensorTargetCondition(InputTargetCondition):
         :param target: The target data for the condition.
         :type target: torch.Tensor | LabelTensor
         """
+        self.graph_field = "input"
+        self.tensor_fields = ["target"]
+        self.keys_map = {"target": "y"}
         super().__init__(input=input, target=target)
-        self.batch_fn = (
-            LabelBatch.from_data_list
-            if isinstance(input[0], Graph)
-            else Batch.from_data_list
-        )
-
-    def _store_data(self, **kwargs):
-        return self._store_graph_data(
-            kwargs["input"], kwargs["target"], key="y"
-        )
 
     @property
     def input(self):
@@ -343,27 +275,6 @@ class GraphInputTensorTargetCondition(InputTargetCondition):
             targets.append(graph.y)
 
         return torch.stack(targets) if not is_lt else LabelTensor.stack(targets)
-
-    def __getitem__(self, idx):
-        if isinstance(idx, list):
-            return self.get_multiple_data(idx)
-        return {"data": self.data["data"][idx]}
-
-    def get_multiple_data(self, indices):
-        """
-        Get multiple data items based on the provided indices.
-
-        :param List[int] indices: List of indices to retrieve.
-        :return: Dictionary containing 'input' and 'target' data.
-        :rtype: dict
-        """
-        data = self.batch_fn([self.data["data"][i] for i in indices])
-        y = data.y
-        del data.y  # Avoid duplication of y on GPU memory
-        return {
-            "input": data,
-            "target": y,
-        }
 
     @classmethod
     def automatic_batching_collate_fn(cls, batch):

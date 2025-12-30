@@ -67,3 +67,12 @@ class DomainEquationCondition(ConditionBase):
             "`__getitem__` method is not implemented for "
             "`DomainEquationCondition`"
         )
+
+    def store_data(self):
+        """
+        Store the data for the condition by sampling points from the domain.
+
+        :return: Sampled points from the domain.
+        :rtype: dict
+        """
+        return {}
