@@ -13,6 +13,79 @@ from ..label_tensor import LabelTensor
 from ..data.dummy_dataloader import DummyDataloader
 
 
+class TensorCondition:
+    def store_data(self, **kwargs):
+        """
+        Store data for standard tensor condition
+
+        :param kwargs: Keyword arguments representing the data to be stored.
+        :return: A dictionary containing the stored data.
+        :rtype: dict
+        """
+        data = {}
+        for key, value in kwargs.items():
+            data[key] = value
+        return data
+
+
+class GraphCondition:
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        example = kwargs.get(self.graph_field)[0]
+        self.batch_fn = (
+            LabelBatch.from_data_list
+            if isinstance(example, Graph)
+            else Batch.from_data_list
+        )
+
+    def store_data(self, **kwargs):
+        """
+        Store data for graph condition
+
+        :param graphs: List of graphs to store data in.
+        :type graphs: list[Graph] | list[Data]
+        :param tensors: List of tensors to store in the graphs.
+        :type tensors: list[torch.Tensor] | list[LabelTensor]
+        :param key: Key under which to store the tensors in the graphs.
+        :type key: str
+        :return: A dictionary containing the stored data.
+        :rtype: dict
+        """
+        data = []
+        graphs = kwargs.get(self.graph_field)
+        for i, graph in enumerate(graphs):
+            new_graph = deepcopy(graph)
+            for key in self.tensor_fields:
+                tensor = kwargs[key][i]
+                mapping_key = self.keys_map.get(key)
+                setattr(new_graph, mapping_key, tensor)
+            data.append(new_graph)
+        return {"data": data}
+
+    def __getitem__(self, idx):
+        if isinstance(idx, list):
+            return self.get_multiple_data(idx)
+        return {"data": self.data["data"][idx]}
+
+    def get_multiple_data(self, indices):
+        """
+        Get multiple data items based on the provided indices.
+
+        :param List[int] indices: List of indices to retrieve.
+        :return: Dictionary containing 'input' and 'target' data.
+        :rtype: dict
+        """
+        to_return_dict = {}
+        data = self.batch_fn([self.data["data"][i] for i in indices])
+        to_return_dict[self.graph_field] = data
+        for key in self.tensor_fields:
+            mapping_key = self.keys_map.get(key)
+            y = getattr(data, mapping_key)
+            delattr(data, mapping_key)  # Avoid duplication of y on GPU memory
+            to_return_dict[key] = y
+        return to_return_dict
+
+
 class ConditionBase(ConditionInterface):
     """
     Base abstract class for all conditions in PINA.
@@ -34,7 +107,7 @@ class ConditionBase(ConditionInterface):
         :param kwargs: Keyword arguments representing the data to be stored.
         """
         super().__init__()
-        self.data = self._store_data(**kwargs)
+        self.data = self.store_data(**kwargs)
 
     @property
     def problem(self):
@@ -126,43 +199,6 @@ class ConditionBase(ConditionInterface):
                         raise ValueError(
                             "LabelTensor must have the same labels"
                         )
-
-    def _store_tensor_data(self, **kwargs):
-        """
-        Store data for standard tensor condition
-
-        :param kwargs: Keyword arguments representing the data to be stored.
-        :return: A dictionary containing the stored data.
-        :rtype: dict
-        """
-        data = {}
-        for key, value in kwargs.items():
-            data[key] = value
-        return data
-
-    def _store_graph_data(self, graphs, tensors=None, key=None):
-        """
-        Store data for graph condition
-
-        :param graphs: List of graphs to store data in.
-        :type graphs: list[Graph] | list[Data]
-        :param tensors: List of tensors to store in the graphs.
-        :type tensors: list[torch.Tensor] | list[LabelTensor]
-        :param key: Key under which to store the tensors in the graphs.
-        :type key: str
-        :return: A dictionary containing the stored data.
-        :rtype: dict
-        """
-        data = []
-        for i, graph in enumerate(graphs):
-            new_graph = deepcopy(graph)
-            tensor = tensors[i]
-            setattr(new_graph, key, tensor)
-            data.append(new_graph)
-        return {"data": data}
-
-    def _store_data(self, **kwargs):
-        return self._store_tensor_data(**kwargs)
 
     def __len__(self):
         return len(next(iter(self.data.values())))
