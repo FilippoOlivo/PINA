@@ -115,26 +115,6 @@ class InputTargetCondition(ConditionBase):
             "LabelTensor or torch.Tensor objects."
         )
 
-    def __init__(self, **kwargs):
-        """
-        Initialization of the :class:`InputTargetCondition` class.
-
-        :param input: The input data for the condition.
-        :type input: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-        :param target: The target data for the condition.
-        :type target: torch.Tensor | LabelTensor | Graph | Data | list[Graph] |
-            list[Data] | tuple[Graph] | tuple[Data]
-
-        .. note::
-
-            If either ``input`` or ``target`` is a list of
-            :class:`~pina.graph.Graph` or :class:`~torch_geometric.data.Data`
-            objects, all elements in the list must share the same structure,
-            with matching keys and consistent data types.
-        """
-        super().__init__(**kwargs)
-
 
 class TensorInputTensorTargetCondition(InputTargetCondition, TensorCondition):
     """
@@ -211,22 +191,6 @@ class TensorInputGraphTargetCondition(GraphCondition, InputTargetCondition):
         """
         return self.data["data"]
 
-    @classmethod
-    def automatic_batching_collate_fn(cls, batch):
-        """
-        Collate function to be used in DataLoader.
-
-        :param batch: A list of items from the dataset.
-        :type batch: List[dict]
-        :return: A collated batch.
-        :rtype: dict
-        """
-        collated_graphs = super().automatic_batching_collate_fn(batch)
-        x = collated_graphs["data"].x
-        del collated_graphs["data"].x  # Avoid duplication of y on GPU memory
-        to_return = {"input": x, "target": collated_graphs["data"]}
-        return to_return
-
 
 class GraphInputTensorTargetCondition(GraphCondition, InputTargetCondition):
     """
@@ -275,21 +239,3 @@ class GraphInputTensorTargetCondition(GraphCondition, InputTargetCondition):
             targets.append(graph.y)
 
         return torch.stack(targets) if not is_lt else LabelTensor.stack(targets)
-
-    @classmethod
-    def automatic_batching_collate_fn(cls, batch):
-        """
-        Collate function to be used in DataLoader.
-
-        :param batch: A list of items from the dataset.
-        :type batch: list
-        :return: A collated batch.
-        :rtype: dict
-        """
-        collated_graphs = super().automatic_batching_collate_fn(batch)
-        y = collated_graphs["data"].y
-        del collated_graphs["data"].y  # Avoid duplication of y on GPU memory
-        print("y shape:", y.shape)
-        print(y.labels)
-        to_return = {"target": y, "input": collated_graphs["data"]}
-        return to_return

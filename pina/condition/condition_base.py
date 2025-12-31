@@ -14,6 +14,10 @@ from ..data.dummy_dataloader import DummyDataloader
 
 
 class TensorCondition:
+    """
+    Base class for tensor conditions.
+    """
+
     def store_data(self, **kwargs):
         """
         Store data for standard tensor condition
@@ -29,6 +33,10 @@ class TensorCondition:
 
 
 class GraphCondition:
+    """
+    Base class for graph conditions.
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         example = kwargs.get(self.graph_field)[0]
@@ -83,6 +91,26 @@ class GraphCondition:
             y = getattr(data, mapping_key)
             delattr(data, mapping_key)  # Avoid duplication of y on GPU memory
             to_return_dict[key] = y
+        return to_return_dict
+
+    @classmethod
+    def automatic_batching_collate_fn(cls, batch):
+        """
+        Collate function to be used in DataLoader.
+
+        :param batch: A list of items from the dataset.
+        :type batch: list
+        :return: A collated batch.
+        :rtype: dict
+        """
+        collated_graphs = super().automatic_batching_collate_fn(batch)["data"]
+        to_return_dict = {}
+        for key in cls.tensor_fields:
+            mapping_key = cls.keys_map.get(key)
+            tensor = getattr(collated_graphs, mapping_key)
+            to_return_dict[key] = tensor
+            delattr(collated_graphs, mapping_key)
+        to_return_dict[cls.graph_field] = collated_graphs
         return to_return_dict
 
 
@@ -269,5 +297,4 @@ class ConditionBase(ConditionInterface):
                 if not automatic_batching
                 else self.automatic_batching_collate_fn
             ),
-            # collate_fn = self.automatic_batching_collate_fn
         )

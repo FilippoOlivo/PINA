@@ -1,10 +1,10 @@
 """Module for the DataCondition class."""
 
 import torch
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Data
 from .condition_base import ConditionBase, GraphCondition, TensorCondition
 from ..label_tensor import LabelTensor
-from ..graph import Graph, LabelBatch
+from ..graph import Graph
 
 
 class DataCondition(ConditionBase):
@@ -201,13 +201,3 @@ class GraphDataCondition(GraphCondition, DataCondition):
             if not is_lt
             else LabelTensor.stack(cond_vars)
         )
-
-    def __getitem__(self, idx):
-        """
-        Get item by index from the input data.
-
-        :param int index: The index of the item to retrieve.
-        :return: The item at the specified index.
-        :rtype: Graph | Data
-        """
-        input_ = self.batch_fn(self.data["input"][idx])
