@@ -338,7 +338,7 @@ class AbstractProblem(metaclass=ABCMeta):
             else:
                 # If the condition does not have a domain attribute, store
                 # the input and target points
-                keys = condition.__slots__
+                keys = condition.__fields__
                 values = [
                     getattr(condition, name)
                     for name in keys
@@ -346,3 +346,16 @@ class AbstractProblem(metaclass=ABCMeta):
                 ]
                 data[condition_name] = dict(zip(keys, values))
         self._collected_data = data
+
+    def move_discretisation_into_conditions(self):
+        """
+        Move the discretised domains into their corresponding conditions.
+        """
+        from pina.condition import Condition
+
+        for name, cond in self.conditions.items():
+            if hasattr(cond, "domain"):
+                self.conditions[name] = Condition(
+                    input=self.discretised_domains[cond.domain],
+                    equation=cond.equation,
+                )

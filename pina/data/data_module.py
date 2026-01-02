@@ -7,232 +7,55 @@ different types of Datasets defined in PINA.
 import warnings
 from lightning.pytorch import LightningDataModule
 import torch
-from torch_geometric.data import Data
-from torch.utils.data import DataLoader, SequentialSampler, RandomSampler
-from torch.utils.data.distributed import DistributedSampler
-from ..label_tensor import LabelTensor
-from .dataset import PinaDatasetFactory, PinaTensorDataset
+from torch_geometric.data import Batch
+
+# from torch.utils.data import DataLoader, SequentialSampler, RandomSampler
+# from torch.utils.data.distributed import DistributedSampler
+from ..graph import Graph, LabelBatch
+from .creator import _Creator
+from .aggregator import _Aggregator
 
 
-class DummyDataloader:
-
-    def __init__(self, dataset):
+class ConditionSubset:
+    def __init__(self, condition, indices, automatic_batching):
         """
-        Prepare a dataloader object that returns the entire dataset in a single
-        batch. Depending on the number of GPUs, the dataset is managed
-        as follows:
+        Create a subset of the given condition based on the provided indices.
 
-        - **Distributed Environment** (multiple GPUs): Divides dataset across
-            processes using the rank and world size. Fetches only portion of
-            data corresponding to the current process.
-        - **Non-Distributed Environment** (single GPU): Fetches the entire
-            dataset.
-
-        :param PinaDataset dataset: The dataset object to be processed.
-
-        .. note::
-           This dataloader is used when the batch size is ``None``.
+        :param ConditionBase condition: The condition from which to create the
+            subset.
+        :param list[int] indices: The indices of the data points to include in
+            the subset.
         """
-
-        if (
-            torch.distributed.is_available()
-            and torch.distributed.is_initialized()
-        ):
-            rank = torch.distributed.get_rank()
-            world_size = torch.distributed.get_world_size()
-            if len(dataset) < world_size:
-                raise RuntimeError(
-                    "Dimension of the dataset smaller than world size."
-                    " Increase the size of the partition or use a single GPU"
-                )
-            idx, i = [], rank
-            while i < len(dataset):
-                idx.append(i)
-                i += world_size
-            self.dataset = dataset.fetch_from_idx_list(idx)
-        else:
-            self.dataset = dataset.get_all_data()
-
-    def __iter__(self):
-        return self
+        self.condition = condition
+        self.indices = indices
+        self.automatic_batching = automatic_batching
+        print(self.automatic_batching)
 
     def __len__(self):
-        return 1
+        return len(self.indices)
 
-    def __next__(self):
-        return self.dataset
-
-
-class Collator:
-    """
-    This callable class is used to collate the data points fetched from the
-    dataset. The collation is performed based on the type of dataset used and
-    on the batching strategy.
-    """
-
-    def __init__(
-        self, max_conditions_lengths, automatic_batching, dataset=None
-    ):
-        """
-        Initialize the object, setting the collate function based on whether
-        automatic batching is enabled or not.
-
-        :param dict max_conditions_lengths: ``dict`` containing the maximum
-            number  of data points to consider in a single batch for
-            each condition.
-        :param bool automatic_batching: Whether automatic PyTorch batching is
-            enabled or not. For more information, see the
-            :class:`~pina.data.data_module.PinaDataModule` class.
-        :param PinaDataset dataset: The dataset where the data is stored.
-        """
-
-        self.max_conditions_lengths = max_conditions_lengths
-        # Set the collate function based on the batching strategy
-        # collate_pina_dataloader is used when automatic batching is disabled
-        # collate_torch_dataloader is used when automatic batching is enabled
-        self.callable_function = (
-            self._collate_torch_dataloader
-            if automatic_batching
-            else (self._collate_pina_dataloader)
-        )
-        self.dataset = dataset
-
-        # Set the function which performs the actual collation
-        if isinstance(self.dataset, PinaTensorDataset):
-            # If the dataset is a PinaTensorDataset, use this collate function
-            self._collate = self._collate_tensor_dataset
+    def __getitem__(self, idx):
+        actual_idx = idx
+        if not self.automatic_batching:
+            return actual_idx
         else:
-            # If the dataset is a PinaDataset, use this collate function
-            self._collate = self._collate_graph_dataset
+            actual_idx = self.indices[idx]
+            return self.condition[actual_idx]
 
-    def _collate_pina_dataloader(self, batch):
-        """
-        Function used to create a batch when automatic batching is disabled.
-
-        :param list[int] batch: List of integers representing the indices of
-            the data points to be fetched.
-        :return: Dictionary containing the data points fetched from the dataset.
-        :rtype: dict
-        """
-        # Call the fetch_from_idx_list method of the dataset
-        return self.dataset.fetch_from_idx_list(batch)
-
-    def _collate_torch_dataloader(self, batch):
-        """
-        Function used to collate the batch
-
-        :param list[dict] batch: List of retrieved data.
-        :return: Dictionary containing the data points fetched from the dataset,
-            collated.
-        :rtype: dict
-        """
-
-        batch_dict = {}
-        if isinstance(batch, dict):
-            return batch
-        conditions_names = batch[0].keys()
-        # Condition names
-        for condition_name in conditions_names:
-            single_cond_dict = {}
-            condition_args = batch[0][condition_name].keys()
-            for arg in condition_args:
-                data_list = [
-                    batch[idx][condition_name][arg]
-                    for idx in range(
-                        min(
-                            len(batch),
-                            self.max_conditions_lengths[condition_name],
-                        )
-                    )
-                ]
-                single_cond_dict[arg] = self._collate(data_list)
-
-            batch_dict[condition_name] = single_cond_dict
-        return batch_dict
-
-    @staticmethod
-    def _collate_tensor_dataset(data_list):
-        """
-        Function used to collate the data when the dataset is a
-        :class:`~pina.data.dataset.PinaTensorDataset`.
-
-        :param data_list: Elements to be collated.
-        :type data_list: list[torch.Tensor] | list[LabelTensor]
-        :return: Batch of data.
-        :rtype: dict
-
-        :raises RuntimeError: If the data is not a :class:`torch.Tensor` or a
-            :class:`~pina.label_tensor.LabelTensor`.
-        """
-
-        if isinstance(data_list[0], LabelTensor):
-            return LabelTensor.stack(data_list)
-        if isinstance(data_list[0], torch.Tensor):
-            return torch.stack(data_list)
-        raise RuntimeError("Data must be Tensors or LabelTensor ")
-
-    def _collate_graph_dataset(self, data_list):
-        """
-        Function used to collate data when the dataset is a
-        :class:`~pina.data.dataset.PinaGraphDataset`.
-
-        :param data_list: Elememts to be collated.
-        :type data_list: list[Data] | list[Graph]
-        :return: Batch of data.
-        :rtype: dict
-
-        :raises RuntimeError: If the data is not a
-            :class:`~torch_geometric.data.Data` or a :class:`~pina.graph.Graph`.
-        """
-        if isinstance(data_list[0], LabelTensor):
-            return LabelTensor.cat(data_list)
-        if isinstance(data_list[0], torch.Tensor):
-            return torch.cat(data_list)
-        if isinstance(data_list[0], Data):
-            return self.dataset.create_batch(data_list)
-        raise RuntimeError(
-            "Data must be Tensors or LabelTensor or pyG "
-            "torch_geometric.data.Data"
-        )
-
-    def __call__(self, batch):
-        """
-        Perform the collation of data fetched from the dataset. The behavoior
-        of the function is set based on the batching strategy during class
-        initialization.
-
-        :param batch: List of retrieved data or sampled indices.
-        :type batch: list[int] | list[dict]
-        :return: Dictionary containing colleted data fetched from the dataset.
-        :rtype: dict
-        """
-
-        return self.callable_function(batch)
-
-
-class PinaSampler:
-    """
-    This class is used to create the sampler instance based on the shuffle
-    parameter and the environment in which the code is running.
-    """
-
-    def __new__(cls, dataset):
-        """
-        Instantiate and initialize the sampler.
-
-        :param PinaDataset dataset: The dataset from which to sample.
-        :return: The sampler instance.
-        :rtype: :class:`torch.utils.data.Sampler`
-        """
-
-        if (
-            torch.distributed.is_available()
-            and torch.distributed.is_initialized()
-        ):
-            sampler = DistributedSampler(dataset)
-        else:
-            sampler = SequentialSampler(dataset)
-        return sampler
+    def get_all_data(self):
+        data = self.condition[self.indices]
+        if "data" in data and isinstance(data["data"], list):
+            batch_fn = (
+                LabelBatch.from_data_list
+                if isinstance(data["data"][0], Graph)
+                else Batch.from_data_list
+            )
+            data["data"] = batch_fn(data["data"])
+            data = {
+                "input": data["data"],
+                "target": data["data"].y,
+            }
+        return data
 
 
 class PinaDataModule(LightningDataModule):
@@ -250,7 +73,7 @@ class PinaDataModule(LightningDataModule):
         val_size=0.1,
         batch_size=None,
         shuffle=True,
-        repeat=False,
+        batching_mode="common_batch_size",
         automatic_batching=None,
         num_workers=0,
         pin_memory=False,
@@ -301,12 +124,13 @@ class PinaDataModule(LightningDataModule):
             https://pytorch.org/docs/stable/data.html#memory-pinning
         """
         super().__init__()
-
+        self.problem = problem
         # Store fixed attributes
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.repeat = repeat
-        self.automatic_batching = automatic_batching
+        self.automatic_batching = (
+            automatic_batching if automatic_batching is not None else True
+        )
 
         # If batch size is None, num_workers has no effect
         if batch_size is None and num_workers != 0:
@@ -329,39 +153,47 @@ class PinaDataModule(LightningDataModule):
             self.pin_memory = pin_memory
 
         # Collect data
-        problem.collect_data()
-
+        problem.move_discretisation_into_conditions()
+        print(self.automatic_batching)
         # Check if the splits are correct
         self._check_slit_sizes(train_size, test_size, val_size)
 
-        # Split input data into subsets
-        splits_dict = {}
         if train_size > 0:
-            splits_dict["train"] = train_size
             self.train_dataset = None
         else:
             # Use the super method to create the train dataloader which
             # raises NotImplementedError
             self.train_dataloader = super().train_dataloader
         if test_size > 0:
-            splits_dict["test"] = test_size
             self.test_dataset = None
         else:
             # Use the super method to create the train dataloader which
             # raises NotImplementedError
             self.test_dataloader = super().test_dataloader
         if val_size > 0:
-            splits_dict["val"] = val_size
             self.val_dataset = None
         else:
             # Use the super method to create the train dataloader which
             # raises NotImplementedError
             self.val_dataloader = super().val_dataloader
 
-        self.data_splits = self._create_splits(
-            problem.collected_data, splits_dict
+        self._create_condition_splits(
+            problem,
+            train_size,
+            test_size,
+            val_size,
         )
-        self.transfer_batch_to_device = self._transfer_batch_to_device
+
+        # Create the data creator
+        self.creator = _Creator(
+            batching_mode=batching_mode,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            automatic_batching=automatic_batching,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            conditions=self.problem.conditions,
+        )
 
     def setup(self, stage=None):
         """
@@ -374,209 +206,67 @@ class PinaDataModule(LightningDataModule):
         :raises ValueError: If the stage is neither "fit" nor "test".
         """
         if stage == "fit" or stage is None:
-            self.train_dataset = PinaDatasetFactory(
-                self.data_splits["train"],
-                max_conditions_lengths=self.find_max_conditions_lengths(
-                    "train"
-                ),
-                automatic_batching=self.automatic_batching,
-            )
-            if "val" in self.data_splits.keys():
-                self.val_dataset = PinaDatasetFactory(
-                    self.data_splits["val"],
-                    max_conditions_lengths=self.find_max_conditions_lengths(
-                        "val"
-                    ),
+            self.train_datasets = {
+                name: ConditionSubset(
+                    condition,
+                    self.split_idxs[name]["train"],
                     automatic_batching=self.automatic_batching,
                 )
-        elif stage == "test":
-            self.test_dataset = PinaDatasetFactory(
-                self.data_splits["test"],
-                max_conditions_lengths=self.find_max_conditions_lengths("test"),
-                automatic_batching=self.automatic_batching,
-            )
-        else:
-            raise ValueError("stage must be either 'fit' or 'test'.")
-
-    @staticmethod
-    def _split_condition(single_condition_dict, splits_dict):
-        """
-        Split the condition into different stages.
-
-        :param dict single_condition_dict: The condition to be split.
-        :param dict splits_dict: The dictionary containing the number of
-            elements in each stage.
-        :return: A dictionary containing the split condition.
-        :rtype: dict
-        """
-
-        len_condition = len(single_condition_dict["input"])
-
-        lengths = [
-            int(len_condition * length) for length in splits_dict.values()
-        ]
-
-        remainder = len_condition - sum(lengths)
-        for i in range(remainder):
-            lengths[i % len(lengths)] += 1
-
-        splits_dict = {
-            k: max(1, v) for k, v in zip(splits_dict.keys(), lengths)
-        }
-        to_return_dict = {}
-        offset = 0
-
-        for stage, stage_len in splits_dict.items():
-            to_return_dict[stage] = {
-                k: v[offset : offset + stage_len]
-                for k, v in single_condition_dict.items()
-                if k != "equation"
-                # Equations are NEVER dataloaded
+                for name, condition in self.problem.conditions.items()
+                if len(self.split_idxs[name]["train"]) > 0
             }
-            if offset + stage_len >= len_condition:
-                offset = len_condition - 1
-                continue
-            offset += stage_len
-        return to_return_dict
-
-    def _create_splits(self, collector, splits_dict):
-        """
-        Create the dataset objects putting data in the correct splits.
-
-        :param Collector collector: The collector object containing the data.
-        :param dict splits_dict: The dictionary containing the number of
-            elements in each stage.
-        :return: The dictionary containing the dataset objects.
-        :rtype: dict
-        """
-
-        # ----------- Auxiliary function ------------
-        def _apply_shuffle(condition_dict, len_data):
-            idx = torch.randperm(len_data)
-            for k, v in condition_dict.items():
-                if k == "equation":
-                    continue
-                if isinstance(v, list):
-                    condition_dict[k] = [v[i] for i in idx]
-                elif isinstance(v, LabelTensor):
-                    condition_dict[k] = LabelTensor(v.tensor[idx], v.labels)
-                elif isinstance(v, torch.Tensor):
-                    condition_dict[k] = v[idx]
-                else:
-                    raise ValueError(f"Data type {type(v)} not supported")
-
-        # ----------- End auxiliary function ------------
-
-        split_names = list(splits_dict.keys())
-        dataset_dict = {name: {} for name in split_names}
-        for (
-            condition_name,
-            condition_dict,
-        ) in collector.items():
-            len_data = len(condition_dict["input"])
-            if self.shuffle:
-                _apply_shuffle(condition_dict, len_data)
-            for key, data in self._split_condition(
-                condition_dict, splits_dict
-            ).items():
-                dataset_dict[key].update({condition_name: data})
-        return dataset_dict
-
-    def _create_dataloader(self, split, dataset):
-        """ "
-        Create the dataloader for the given split.
-
-        :param str split: The split on which to create the dataloader.
-        :param str dataset: The dataset to be used for the dataloader.
-        :return: The dataloader for the given split.
-        :rtype: torch.utils.data.DataLoader
-        """
-        # Suppress the warning about num_workers.
-        # In many cases, especially for PINNs,
-        # serial data loading can outperform parallel data loading.
-        warnings.filterwarnings(
-            "ignore",
-            message=(
-                "The '(train|val|test)_dataloader' does not have many workers "
-                "which may be a bottleneck."
-            ),
-            module="lightning.pytorch.trainer.connectors.data_connector",
-        )
-        # Use custom batching (good if batch size is large)
-        if self.batch_size is not None:
-            sampler = PinaSampler(dataset)
-            if self.automatic_batching:
-                collate = Collator(
-                    self.find_max_conditions_lengths(split),
-                    self.automatic_batching,
-                    dataset=dataset,
+            self.val_datasets = {
+                name: ConditionSubset(
+                    condition,
+                    self.split_idxs[name]["val"],
+                    automatic_batching=self.automatic_batching,
                 )
-            else:
-                collate = Collator(
-                    None, self.automatic_batching, dataset=dataset
+                for name, condition in self.problem.conditions.items()
+                if len(self.split_idxs[name]["val"]) > 0
+            }
+        elif stage == "test":
+            self.test_datasets = {
+                name: ConditionSubset(
+                    condition,
+                    self.split_idxs[name]["test"],
+                    automatic_batching=self.automatic_batching,
                 )
-            return DataLoader(
-                dataset,
-                self.batch_size,
-                collate_fn=collate,
-                sampler=sampler,
-                num_workers=self.num_workers,
-                pin_memory=self.pin_memory,
+                for name, condition in self.problem.conditions.items()
+                if len(self.split_idxs[name]["test"]) > 0
+            }
+        else:
+            raise ValueError(
+                f"Invalid stage {stage}. Stage must be either 'fit' or 'test'."
             )
-        dataloader = DummyDataloader(dataset)
-        dataloader.dataset = self._transfer_batch_to_device(
-            dataloader.dataset, self.trainer.strategy.root_device, 0
-        )
-        self.transfer_batch_to_device = self._transfer_batch_to_device_dummy
-        return dataloader
 
-    def find_max_conditions_lengths(self, split):
-        """
-        Define the maximum length for each conditions.
+    def _create_condition_splits(
+        self, problem, train_size, test_size, val_size
+    ):
+        self.split_idxs = {}
+        for condition_name, condition in problem.conditions.items():
+            len_condition = len(condition)
+            # Create the indices for shuffling and splitting
+            indices = (
+                torch.randperm(len_condition).tolist()
+                if self.shuffle
+                else list(range(len_condition))
+            )
 
-        :param dict split: The split of the dataset.
-        :return: The maximum length per condition.
-        :rtype: dict
-        """
+            # Determine split sizes
+            train_end = int(train_size * len_condition)
+            test_end = train_end + int(test_size * len_condition)
 
-        max_conditions_lengths = {}
-        for k, v in self.data_splits[split].items():
-            if self.batch_size is None:
-                max_conditions_lengths[k] = len(v["input"])
-            elif self.repeat:
-                max_conditions_lengths[k] = self.batch_size
-            else:
-                max_conditions_lengths[k] = min(
-                    len(v["input"]), self.batch_size
-                )
-        return max_conditions_lengths
-
-    def val_dataloader(self):
-        """
-        Create the validation dataloader.
-
-        :return: The validation dataloader
-        :rtype: torch.utils.data.DataLoader
-        """
-        return self._create_dataloader("val", self.val_dataset)
-
-    def train_dataloader(self):
-        """
-        Create the training dataloader
-
-        :return: The training dataloader
-        :rtype: torch.utils.data.DataLoader
-        """
-        return self._create_dataloader("train", self.train_dataset)
-
-    def test_dataloader(self):
-        """
-        Create the testing dataloader
-
-        :return: The testing dataloader
-        :rtype: torch.utils.data.DataLoader
-        """
-        return self._create_dataloader("test", self.test_dataset)
+            # Split indices
+            train_indices = indices[:train_end]
+            test_indices = indices[train_end:test_end]
+            val_indices = indices[test_end:]
+            splits = {}
+            splits["train"], splits["test"], splits["val"] = (
+                train_indices,
+                test_indices,
+                val_indices,
+            )
+            self.split_idxs[condition_name] = splits
 
     @staticmethod
     def _transfer_batch_to_device_dummy(batch, device, dataloader_idx):
@@ -594,7 +284,7 @@ class PinaDataModule(LightningDataModule):
 
         return batch
 
-    def _transfer_batch_to_device(self, batch, device, dataloader_idx):
+    def transfer_batch_to_device(self, batch, device, dataloader_idx):
         """
         Transfer the batch to the device. This method is called in the
         training loop and is used to transfer the batch to the device.
@@ -616,7 +306,6 @@ class PinaDataModule(LightningDataModule):
             )
             for k, v in batch.items()
         ]
-
         return batch
 
     @staticmethod
@@ -639,20 +328,17 @@ class PinaDataModule(LightningDataModule):
         if abs(train_size + test_size + val_size - 1) > 1e-6:
             raise ValueError("The sum of the splits must be 1")
 
-    @property
-    def input(self):
-        """
-        Return all the input points coming from all the datasets.
+    def train_dataloader(self):
+        return _Aggregator(
+            self.creator(self.train_datasets), self.creator.batching_mode
+        )
 
-        :return: The input points for training.
-        :rtype: dict
-        """
+    def val_dataloader(self):
+        return _Aggregator(
+            self.creator(self.val_datasets), self.creator.batching_mode
+        )
 
-        to_return = {}
-        if hasattr(self, "train_dataset") and self.train_dataset is not None:
-            to_return["train"] = self.train_dataset.input
-        if hasattr(self, "val_dataset") and self.val_dataset is not None:
-            to_return["val"] = self.val_dataset.input
-        if hasattr(self, "test_dataset") and self.test_dataset is not None:
-            to_return["test"] = self.test_dataset.input
-        return to_return
+    def test_dataloader(self):
+        return _Aggregator(
+            self.creator(self.test_datasets), self.creator.batching_mode
+        )

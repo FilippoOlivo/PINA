@@ -276,7 +276,7 @@ class ConditionBase(ConditionInterface):
         return data
 
     def create_dataloader(
-        self, dataset, batch_size, shuffle, automatic_batching
+        self, dataset, batch_size, automatic_batching=False, **kwargs
     ):
         """
         Create a DataLoader for the condition.
@@ -291,10 +291,10 @@ class ConditionBase(ConditionInterface):
         return DataLoader(
             dataset=dataset,
             batch_size=batch_size,
-            shuffle=shuffle,
             collate_fn=(
                 partial(self.collate_fn, condition=self)
                 if not automatic_batching
                 else self.automatic_batching_collate_fn
             ),
+            **kwargs,
         )

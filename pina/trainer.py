@@ -31,7 +31,7 @@ class Trainer(lightning.pytorch.Trainer):
         test_size=0.0,
         val_size=0.0,
         compile=None,
-        repeat=None,
+        batching_mode=None,
         automatic_batching=None,
         num_workers=None,
         pin_memory=None,
@@ -82,9 +82,12 @@ class Trainer(lightning.pytorch.Trainer):
             train_size=train_size,
             test_size=test_size,
             val_size=val_size,
-            repeat=repeat,
+            batching_mode=batching_mode,
             automatic_batching=automatic_batching,
             compile=compile,
+        )
+        batching_mode = (
+            batching_mode if batching_mode is not None else "common_batch_size"
         )
         pin_memory, num_workers, shuffle, batch_size = (
             self._check_consistency_and_set_defaults(
@@ -122,8 +125,6 @@ class Trainer(lightning.pytorch.Trainer):
                 UserWarning,
             )
 
-        repeat = repeat if repeat is not None else False
-
         automatic_batching = (
             automatic_batching if automatic_batching is not None else False
         )
@@ -139,7 +140,7 @@ class Trainer(lightning.pytorch.Trainer):
             test_size=test_size,
             val_size=val_size,
             batch_size=batch_size,
-            repeat=repeat,
+            batching_mode=batching_mode,
             automatic_batching=automatic_batching,
             pin_memory=pin_memory,
             num_workers=num_workers,
@@ -177,7 +178,7 @@ class Trainer(lightning.pytorch.Trainer):
         test_size,
         val_size,
         batch_size,
-        repeat,
+        batching_mode,
         automatic_batching,
         pin_memory,
         num_workers,
@@ -227,7 +228,7 @@ class Trainer(lightning.pytorch.Trainer):
             test_size=test_size,
             val_size=val_size,
             batch_size=batch_size,
-            repeat=repeat,
+            batching_mode=batching_mode,
             automatic_batching=automatic_batching,
             num_workers=num_workers,
             pin_memory=pin_memory,
@@ -279,7 +280,7 @@ class Trainer(lightning.pytorch.Trainer):
         train_size,
         test_size,
         val_size,
-        repeat,
+        batching_mode,
         automatic_batching,
         compile,
     ):
@@ -304,8 +305,8 @@ class Trainer(lightning.pytorch.Trainer):
         check_consistency(train_size, float)
         check_consistency(test_size, float)
         check_consistency(val_size, float)
-        if repeat is not None:
-            check_consistency(repeat, bool)
+        if batching_mode is not None:
+            check_consistency(batching_mode, str)
         if automatic_batching is not None:
             check_consistency(automatic_batching, bool)
         if compile is not None:
