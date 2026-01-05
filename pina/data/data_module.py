@@ -8,9 +8,6 @@ import warnings
 from lightning.pytorch import LightningDataModule
 import torch
 from torch_geometric.data import Batch
-
-# from torch.utils.data import DataLoader, SequentialSampler, RandomSampler
-# from torch.utils.data.distributed import DistributedSampler
 from ..graph import Graph, LabelBatch
 from .creator import _Creator
 from .aggregator import _Aggregator
@@ -29,18 +26,15 @@ class ConditionSubset:
         self.condition = condition
         self.indices = indices
         self.automatic_batching = automatic_batching
-        print(self.automatic_batching)
 
     def __len__(self):
         return len(self.indices)
 
     def __getitem__(self, idx):
-        actual_idx = idx
-        if not self.automatic_batching:
-            return actual_idx
-        else:
-            actual_idx = self.indices[idx]
-            return self.condition[actual_idx]
+        idx = self.indices[idx]
+        if self.automatic_batching:
+            return self.condition[idx]
+        return idx
 
     def get_all_data(self):
         data = self.condition[self.indices]
