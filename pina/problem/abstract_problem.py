@@ -38,6 +38,8 @@ class AbstractProblem(metaclass=ABCMeta):
                 if isinstance(cond.domain, DomainInterface):
                     self.domains[cond_name] = cond.domain
                     cond.domain = cond_name
+            cond.problem = self
+            print(cond.problem)
 
         self._collected_data = {}
 
@@ -355,7 +357,10 @@ class AbstractProblem(metaclass=ABCMeta):
 
         for name, cond in self.conditions.items():
             if hasattr(cond, "domain"):
+                domain = cond.domain
                 self.conditions[name] = Condition(
                     input=self.discretised_domains[cond.domain],
                     equation=cond.equation,
                 )
+                self.conditions[name].domain = domain
+                self.conditions[name].problem = self

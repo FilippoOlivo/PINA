@@ -4,6 +4,7 @@ from .condition_base import ConditionBase, TensorCondition, GraphCondition
 from ..label_tensor import LabelTensor
 from ..graph import Graph
 from ..equation.equation_interface import EquationInterface
+from ..domain import BaseDomain
 
 
 class InputEquationCondition(ConditionBase):
@@ -98,6 +99,29 @@ class InputEquationCondition(ConditionBase):
         """
         super().__init__(input=input)
         self.equation = equation
+        self._domain = None  # Domain is not specified for this condition
+
+    @property
+    def domain(self):
+        """
+        Return the domain associated with the condition.
+
+        :return: The domain associated with the condition.
+        :rtype: Domain | None
+        """
+        print(self.problem)
+        return self.problem.domains[self._domain] if self._domain else None
+
+    @domain.setter
+    def domain(self, value):
+        """
+        Set the domain associated with the condition.
+
+        :param Domain value: The domain to be associated with the condition.
+        """
+        if not isinstance(value, str) and value is not None:
+            raise ValueError("The domain must be a BaseDomain object or None.")
+        self._domain = value
 
 
 class InputTensorEquationCondition(TensorCondition, InputEquationCondition):

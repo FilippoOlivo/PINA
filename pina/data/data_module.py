@@ -148,7 +148,7 @@ class PinaDataModule(LightningDataModule):
 
         # Collect data
         problem.move_discretisation_into_conditions()
-        print(self.automatic_batching)
+
         # Check if the splits are correct
         self._check_slit_sizes(train_size, test_size, val_size)
 

@@ -86,6 +86,7 @@ class Trainer(lightning.pytorch.Trainer):
             automatic_batching=automatic_batching,
             compile=compile,
         )
+        print(batching_mode)
         batching_mode = (
             batching_mode if batching_mode is not None else "common_batch_size"
         )

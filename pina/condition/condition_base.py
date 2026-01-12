@@ -136,6 +136,7 @@ class ConditionBase(ConditionInterface):
         """
         super().__init__()
         self.data = self.store_data(**kwargs)
+        self._problem = None
 
     @property
     def problem(self):
